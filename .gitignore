@@ -1,0 +1,53 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# Virtual environment
+venv/
+env/
+.venv/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Numba / CUDA cache
+__pycache__/
+*.nbc
+*.nbi
+.numba_cache/
+
+# Dataset & model weights (thường nặng, không nên commit)
+data/
+*.pt
+*.pth
+*.weights
+*.onnx
+datasets/
+*.zip
+*.tar
+*.tar.gz
+
+# Benchmark / profiling output
+*.prof
+profile_output/
+benchmarks/results/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# Environment variables / secrets
+.env
+
+# Colab
+.colab/
