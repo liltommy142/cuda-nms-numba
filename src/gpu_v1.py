@@ -121,9 +121,10 @@ def run_gpu_v1(
     """GPU V1 Non-Maximum Suppression.
 
     1. Sort boxes by score (stable, on CPU).
-    2. Upload boxes → GPU; compute full N×N IoU matrix with the CUDA kernel.
+    2. Upload score-sorted boxes → GPU; compute N×N IoU matrix with the kernel.
     3. Download IoU matrix → CPU.
-    4. Greedy suppression loop on CPU using O(1) IoU lookups.
+    4. Greedy suppression using *vectorized* NumPy row-slices  (no inner Python
+       loop — this was the critical fix vs. the naïve nested-loop version).
 
     Parameters
     ----------
@@ -133,30 +134,35 @@ def run_gpu_v1(
 
     Returns
     -------
-    keep : (K,) int64  indices of kept boxes, ordered by descending score
+    keep : (K,) int64  indices of kept boxes in original array, descending score
     """
     n = len(boxes)
-    order = np.argsort(-scores, kind="stable")  # stable: deterministic on score ties
+    order = np.argsort(-scores, kind="stable")   # stable: deterministic on score ties
 
-    # ── GPU: embarrassingly parallel IoU computation ──────────────────────────
-    iou_matrix = compute_iou_matrix_gpu(boxes)
+    # Sort boxes/scores into score-descending order before uploading.
+    # After this, row i of the IoU matrix corresponds to the i-th highest-score box.
+    boxes_sorted = np.ascontiguousarray(boxes[order], dtype=np.float32)
 
-    # ── CPU: sequential greedy suppression using precomputed IoU ─────────────
+    # ── GPU: compute full N×N IoU matrix (embarrassingly parallel) ────────────
+    iou_matrix = compute_iou_matrix_gpu(boxes_sorted)  # shape (N, N)
+
+    # ── CPU: vectorized greedy suppression ─────────────────────────────────
+    # suppressed[i] = True means box at rank i has been suppressed.
     suppressed = np.zeros(n, dtype=bool)
-    keep = []
+    keep_ranks = []   # ranks (in sorted order) of kept boxes
 
-    for rank_i in range(n):
-        idx = order[rank_i]
-        if suppressed[idx]:
+    for i in range(n):
+        if suppressed[i]:
             continue
-        keep.append(idx)
+        keep_ranks.append(i)
+        if i + 1 < n:
+            # KEY FIX: one NumPy broadcast instead of an inner Python loop.
+            # iou_matrix[i, i+1:] gives all IoU values between box i and every
+            # lower-score box in a single C-speed array operation.
+            suppressed[i + 1 :] |= iou_matrix[i, i + 1 :] > iou_threshold
 
-        for rank_j in range(rank_i + 1, n):
-            jdx = order[rank_j]
-            if not suppressed[jdx] and iou_matrix[idx, jdx] > iou_threshold:
-                suppressed[jdx] = True
-
-    return np.array(keep, dtype=np.int64)
+    # Map sorted ranks back to original box indices
+    return order[np.array(keep_ranks, dtype=np.int64)]
 
 
 # ─────────────────────────────────────────────────────────────────────────────
