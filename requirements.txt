@@ -3,3 +3,21 @@ torch
 torchvision
 numba
 pytest
+
+# Required by torch.hub's ultralytics/yolov5 hubconf.py (used by load_real_boxes)
+ultralytics
+pandas
+seaborn
+matplotlib
+opencv-python
+pillow
+scipy
+psutil
+gitpython
+requests
+tqdm
+thop
+PyYAML
+packaging
+setuptools
+urllib3

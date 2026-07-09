@@ -37,7 +37,7 @@ def load_real_boxes(image_paths=None, conf_threshold=0.25):
     """Run pretrained YOLOv5s on a handful of images to get real (boxes, scores)."""
     import torch
 
-    model = torch.hub.load("ultralytics/yolov5", "yolov5s", pretrained=True)
+    model = torch.hub.load("ultralytics/yolov5", "yolov5s", pretrained=True, trust_repo=True)
     model.conf = conf_threshold
     if not image_paths:
         image_paths = ["https://ultralytics.com/images/zidane.jpg"]
