@@ -358,3 +358,67 @@ def test_gpu_v2_various_thresholds(iou_threshold):
         f"iou_threshold={iou_threshold}: GPU V2 kept {len(gpu_keep)}, "
         f"CPU kept {len(cpu_keep)}"
     )
+
+# -----------------------------------------------------------------------------
+# GPU V3 -- Matrix NMS unit tests
+# -----------------------------------------------------------------------------
+
+@requires_gpu
+def test_gpu_v3_suppresses_duplicate():
+    """V3 Matrix NMS must suppress exact duplicate boxes."""
+    from gpu_v3 import run_gpu_v3_matrix_nms
+
+    boxes = np.array([
+        [10, 10, 50, 50],
+        [10, 10, 50, 50],  # Exact duplicate
+    ], dtype=np.float32)
+    scores = np.array([0.9, 0.8], dtype=np.float32)
+
+    # Box 1 has score 0.8. IoU = 1.0. iou_max[1] = 1.0.
+    # Linear: decay = (1-1) / (1-1) -> fallback to 0.0 or very small.
+    # Gaussian: exp((1^2 - 1^2)/2) = 1.0. Wait!
+    # If IoU(1, 1) = 1.0 and iou_max[1] = 1.0.
+    # decay = exp(0) = 1.0.
+    # Actually, in Matrix NMS, for box 1, we check min_{i<1} (f(IoU(0,1)) / f(iou_max[0])).
+    # iou_max[0] = 0.0. IoU(0, 1) = 1.0.
+    # Gaussian: decay_1 = exp((0 - 1)/2) = exp(-0.5) = 0.606.
+    # Score becomes 0.8 * 0.606 = 0.485.
+    # If we set score_threshold = 0.5, it will be suppressed.
+    
+    keep = run_gpu_v3_matrix_nms(boxes, scores, score_threshold=0.5, method="gaussian")
+    assert len(keep) == 1, f"Expected 1 kept box, got {len(keep)}"
+    assert keep[0] == 0, "Should keep the box with higher score"
+
+
+@requires_gpu
+def test_gpu_v3_keeps_non_overlapping():
+    """V3 Matrix NMS must keep completely non-overlapping boxes."""
+    from gpu_v3 import run_gpu_v3_matrix_nms
+
+    boxes = np.array([
+        [0, 0, 10, 10],
+        [20, 20, 30, 30],
+        [40, 40, 50, 50],
+    ], dtype=np.float32)
+    scores = np.array([0.9, 0.8, 0.7], dtype=np.float32)
+
+    # All IoUs are 0. Decay factors are 1.0.
+    # Scores remain the same. All are above 0.05.
+    keep = run_gpu_v3_matrix_nms(boxes, scores, score_threshold=0.05)
+    
+    assert len(keep) == 3, f"Expected 3 kept boxes, got {len(keep)}"
+
+
+@requires_gpu
+@pytest.mark.parametrize("n", [50, 200])
+def test_gpu_v3_sanity(n):
+    """V3 Matrix NMS runs without crashing and returns valid indices."""
+    from gpu_v3 import run_gpu_v3_matrix_nms
+
+    boxes, scores = load_data(n, seed=42)
+    keep = run_gpu_v3_matrix_nms(boxes, scores, score_threshold=0.05, method="linear")
+
+    assert len(keep) > 0, "Should keep at least some boxes"
+    assert len(keep) <= n, "Kept boxes cannot exceed total boxes"
+    assert len(set(keep)) == len(keep), "Kept indices must be unique"
+    assert all(0 <= idx < n for idx in keep), "Indices must be in [0, N-1]"

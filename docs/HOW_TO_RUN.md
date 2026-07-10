@@ -7,12 +7,14 @@
 Mở thẳng notebook từ GitHub qua link Colab (không cần tải file về máy):
 
 - GPU V1: https://colab.research.google.com/github/liltommy142/cuda-nms-numba/blob/main/src/gpu_v1.ipynb
+- GPU V2 (Bitmask NMS): https://colab.research.google.com/github/liltommy142/cuda-nms-numba/blob/main/src/gpu_v2.ipynb
+- GPU V3 (Matrix NMS): https://colab.research.google.com/github/liltommy142/cuda-nms-numba/blob/main/src/gpu_v3.ipynb
 - CPU baseline: https://colab.research.google.com/github/liltommy142/cuda-nms-numba/blob/main/src/cpu_baseline.ipynb
 
 **Các bước:**
 
 1. Mở link ở trên (đăng nhập Google trước).
-2. **Chỉ cần cho `gpu_v1.ipynb`**: bật GPU — menu `Runtime` → `Change runtime type` → chọn **T4 GPU** ở mục Hardware accelerator → `Save`.
+2. **Chỉ cần cho file GPU**: bật GPU — menu `Runtime` → `Change runtime type` → chọn **T4 GPU** ở mục Hardware accelerator → `Save`.
 3. Chạy toàn bộ: menu `Runtime` → `Run all` (hoặc `Ctrl+F9`). Mất khoảng 1-2 phút, phần lớn là thời gian cài `numba` / kết nối GPU lần đầu.
 4. Đọc kết quả: cell benchmark cuối cùng in bảng `N | CPU(s) | GPU V1(s) | Speedup`. Không có traceback đỏ → thành công.
 
@@ -29,6 +31,11 @@ source .venv/bin/activate
 # CPU baseline
 python src/cpu_baseline.py --n 1000 --verify
 python src/cpu_baseline.py --benchmark
+
+# Chạy GPU scripts (Chỉ áp dụng nếu máy bạn CÓ GPU NVIDIA cài sẵn CUDA và Numba)
+python src/gpu_v1.py --benchmark
+python src/gpu_v2.py --benchmark
+python src/gpu_v3.py --benchmark
 
 # Toàn bộ test
 pytest tests/ -v
