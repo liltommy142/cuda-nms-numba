@@ -201,3 +201,160 @@ def test_gpu_v1_matches_cpu_baseline(n):
         f"  only in CPU: {sorted(cpu_keep - gpu_keep)}\n"
         f"  only in GPU: {sorted(gpu_keep - cpu_keep)}"
     )
+
+
+# -----------------------------------------------------------------------------
+# GPU V2 -- IoU matrix unit tests (coalesced SoA kernel)
+# -----------------------------------------------------------------------------
+
+@requires_gpu
+def test_gpu_v2_iou_matrix_diagonal_is_one():
+    """IoU(box_i, box_i) must equal 1.0 for every box (coalesced SoA kernel)."""
+    from gpu_v2 import compute_iou_matrix_gpu_v2
+
+    boxes, _ = load_data(20, seed=0)
+    d_iou = compute_iou_matrix_gpu_v2(boxes)
+    iou_mat = d_iou.copy_to_host()
+    assert np.allclose(np.diag(iou_mat), 1.0, atol=1e-4), \
+        "Diagonal of V2 IoU matrix should be all 1s"
+
+
+@requires_gpu
+def test_gpu_v2_iou_matrix_is_symmetric():
+    """IoU is symmetric: IoU(i, j) == IoU(j, i) (coalesced SoA kernel)."""
+    from gpu_v2 import compute_iou_matrix_gpu_v2
+
+    boxes, _ = load_data(30, seed=1)
+    d_iou = compute_iou_matrix_gpu_v2(boxes)
+    iou_mat = d_iou.copy_to_host()
+    assert np.allclose(iou_mat, iou_mat.T, atol=1e-5), \
+        "V2 IoU matrix should be symmetric"
+
+
+@requires_gpu
+def test_gpu_v2_iou_matrix_matches_cpu():
+    """GPU V2 coalesced IoU values must be within 1e-4 of the CPU reference."""
+    from gpu_v2 import compute_iou_matrix_gpu_v2
+
+    boxes, _ = load_data(50, seed=2)
+    d_iou = compute_iou_matrix_gpu_v2(boxes)
+    iou_mat_gpu = d_iou.copy_to_host()
+
+    n = len(boxes)
+    iou_mat_cpu = np.zeros((n, n), dtype=np.float32)
+    for i in range(n):
+        iou_mat_cpu[i] = iou_one_to_many(boxes[i], boxes)
+
+    assert np.allclose(iou_mat_gpu, iou_mat_cpu, atol=1e-4), \
+        "GPU V2 SoA IoU matrix should match CPU reference within 1e-4"
+
+
+@requires_gpu
+def test_gpu_v2_iou_matrix_matches_v1():
+    """GPU V2 coalesced IoU values must match GPU V1 values within 1e-5."""
+    from gpu_v1 import compute_iou_matrix_gpu
+    from gpu_v2 import compute_iou_matrix_gpu_v2
+
+    boxes, _ = load_data(50, seed=3)
+    iou_v1 = compute_iou_matrix_gpu(boxes)          # host array from V1
+    d_iou_v2 = compute_iou_matrix_gpu_v2(boxes)
+    iou_v2 = d_iou_v2.copy_to_host()
+
+    assert np.allclose(iou_v1, iou_v2, atol=1e-5), \
+        "GPU V2 IoU matrix should match GPU V1 IoU matrix within 1e-5"
+
+
+# -----------------------------------------------------------------------------
+# GPU V2 -- NMS correctness tests
+# -----------------------------------------------------------------------------
+
+@requires_gpu
+def test_gpu_v2_suppresses_duplicate():
+    """GPU V2 must suppress the lower-score duplicate box."""
+    from gpu_v2 import run_gpu_v2
+
+    boxes = np.array([[0, 0, 10, 10], [0, 0, 10, 10]], dtype=np.float32)
+    scores = np.array([0.9, 0.5], dtype=np.float32)
+    keep = run_gpu_v2(boxes, scores, iou_threshold=0.5)
+    assert set(keep.tolist()) == {0}, \
+        f"GPU V2 should keep only box 0, got {sorted(keep.tolist())}"
+
+
+@requires_gpu
+def test_gpu_v2_keeps_non_overlapping():
+    """GPU V2 must keep both boxes when they do not overlap."""
+    from gpu_v2 import run_gpu_v2
+
+    boxes = np.array([[0, 0, 10, 10], [1000, 1000, 1010, 1010]], dtype=np.float32)
+    scores = np.array([0.9, 0.5], dtype=np.float32)
+    keep = run_gpu_v2(boxes, scores, iou_threshold=0.5)
+    assert set(keep.tolist()) == {0, 1}, \
+        f"GPU V2 should keep both non-overlapping boxes, got {sorted(keep.tolist())}"
+
+
+@requires_gpu
+def test_gpu_v2_keeps_all_when_threshold_one():
+    """With iou_threshold=1.0 only exact duplicates are suppressed."""
+    from gpu_v2 import run_gpu_v2
+
+    boxes, scores = load_data(20, seed=10)
+    keep = run_gpu_v2(boxes, scores, iou_threshold=1.0)
+    assert len(keep) == len(boxes), \
+        (f"With threshold=1.0 all {len(boxes)} unique boxes should be kept, "
+         f"got {len(keep)}")
+
+
+@requires_gpu
+@pytest.mark.parametrize("n", [50, 200, 1000])
+def test_gpu_v2_matches_cpu_baseline(n):
+    """GPU V2 kept-box set must match cpu_baseline.run_cpu exactly."""
+    from gpu_v2 import run_gpu_v2
+
+    boxes, scores = load_data(n, seed=42)
+    iou_threshold = 0.5
+
+    cpu_keep = set(run_cpu(boxes, scores, iou_threshold).tolist())
+    gpu_keep = set(run_gpu_v2(boxes, scores, iou_threshold).tolist())
+
+    assert cpu_keep == gpu_keep, (
+        f"N={n}: GPU V2 kept {len(gpu_keep)} boxes, CPU kept {len(cpu_keep)} boxes\n"
+        f"  only in CPU: {sorted(cpu_keep - gpu_keep)}\n"
+        f"  only in GPU: {sorted(gpu_keep - cpu_keep)}"
+    )
+
+
+@requires_gpu
+@pytest.mark.parametrize("n", [50, 200, 1000])
+def test_gpu_v2_matches_gpu_v1(n):
+    """GPU V2 kept-box set must match GPU V1 exactly (cross-check)."""
+    from gpu_v1 import run_gpu_v1
+    from gpu_v2 import run_gpu_v2
+
+    boxes, scores = load_data(n, seed=99)
+    iou_threshold = 0.5
+
+    v1_keep = set(run_gpu_v1(boxes, scores, iou_threshold).tolist())
+    v2_keep = set(run_gpu_v2(boxes, scores, iou_threshold).tolist())
+
+    assert v1_keep == v2_keep, (
+        f"N={n}: GPU V2 kept {len(v2_keep)} boxes, GPU V1 kept {len(v1_keep)} boxes\n"
+        f"  only in V1: {sorted(v1_keep - v2_keep)}\n"
+        f"  only in V2: {sorted(v2_keep - v1_keep)}"
+    )
+
+
+@requires_gpu
+@pytest.mark.parametrize("iou_threshold", [0.3, 0.5, 0.7])
+def test_gpu_v2_various_thresholds(iou_threshold):
+    """GPU V2 must match CPU baseline across different IoU thresholds."""
+    from gpu_v2 import run_gpu_v2
+
+    boxes, scores = load_data(200, seed=7)
+
+    cpu_keep = set(run_cpu(boxes, scores, iou_threshold).tolist())
+    gpu_keep = set(run_gpu_v2(boxes, scores, iou_threshold).tolist())
+
+    assert cpu_keep == gpu_keep, (
+        f"iou_threshold={iou_threshold}: GPU V2 kept {len(gpu_keep)}, "
+        f"CPU kept {len(cpu_keep)}"
+    )
