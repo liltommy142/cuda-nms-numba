@@ -185,9 +185,25 @@ def test_gpu_v1_keeps_non_overlapping():
 
 
 @requires_gpu
-@pytest.mark.parametrize("n", [50, 200, 1000])
+def test_gpu_v1_handles_empty_input():
+    """N=0 must not crash (0-block kernel launch); previously unguarded/untested."""
+    from gpu_v1 import run_gpu_v1
+
+    boxes = np.zeros((0, 4), dtype=np.float32)
+    scores = np.zeros((0,), dtype=np.float32)
+    keep = run_gpu_v1(boxes, scores, iou_threshold=0.5)
+    assert len(keep) == 0
+
+
+@requires_gpu
+@pytest.mark.parametrize("n", [50, 200, 1000, 10_000])
 def test_gpu_v1_matches_cpu_baseline(n):
-    """GPU V1 kept-box set must match cpu_baseline.run_cpu exactly."""
+    """GPU V1 kept-box set must match cpu_baseline.run_cpu exactly.
+
+    N=10_000 is included because that is the scale the 9.7x speedup claim is
+    made at (see README.md) -- correctness was previously only verified up to
+    N=1000, i.e. never actually checked at the scale the speedup is reported.
+    """
     from gpu_v1 import run_gpu_v1
 
     boxes, scores = load_data(n, seed=42)
@@ -305,9 +321,14 @@ def test_gpu_v2_keeps_all_when_threshold_one():
 
 
 @requires_gpu
-@pytest.mark.parametrize("n", [50, 200, 1000])
+@pytest.mark.parametrize("n", [50, 200, 1000, 10_000])
 def test_gpu_v2_matches_cpu_baseline(n):
-    """GPU V2 kept-box set must match cpu_baseline.run_cpu exactly."""
+    """GPU V2 kept-box set must match cpu_baseline.run_cpu exactly.
+
+    N=10_000 is included because that is the scale the >=15x speedup target
+    is defined at (see README.md) -- correctness was previously only verified
+    up to N=1000.
+    """
     from gpu_v2 import run_gpu_v2
 
     boxes, scores = load_data(n, seed=42)
@@ -324,7 +345,7 @@ def test_gpu_v2_matches_cpu_baseline(n):
 
 
 @requires_gpu
-@pytest.mark.parametrize("n", [50, 200, 1000])
+@pytest.mark.parametrize("n", [50, 200, 1000, 10_000])
 def test_gpu_v2_matches_gpu_v1(n):
     """GPU V2 kept-box set must match GPU V1 exactly (cross-check)."""
     from gpu_v1 import run_gpu_v1
@@ -357,6 +378,33 @@ def test_gpu_v2_various_thresholds(iou_threshold):
     assert cpu_keep == gpu_keep, (
         f"iou_threshold={iou_threshold}: GPU V2 kept {len(gpu_keep)}, "
         f"CPU kept {len(cpu_keep)}"
+    )
+
+
+@requires_gpu
+def test_gpu_v2_matches_cpu_with_score_ties():
+    """Many boxes sharing the exact same score -- exercises the stable-sort
+    tie-break path end to end (previously untested; see QA_PREP.md 'Vi sao
+    can stable sort?'). Both CPU and GPU sort with the same
+    np.argsort(..., kind="stable") call before processing, so this mainly
+    guards against off-by-one/rank-boundary bugs when many ranks are tied,
+    not CPU/GPU divergence per se.
+    """
+    from gpu_v2 import run_gpu_v2
+
+    boxes, _ = load_data(300, seed=5)
+    # Collapse to 5 distinct score values so most boxes tie with several others.
+    rng = np.random.default_rng(5)
+    scores = (rng.integers(0, 5, size=300).astype(np.float32)) / 4.0
+
+    iou_threshold = 0.5
+    cpu_keep = set(run_cpu(boxes, scores, iou_threshold).tolist())
+    gpu_keep = set(run_gpu_v2(boxes, scores, iou_threshold).tolist())
+
+    assert cpu_keep == gpu_keep, (
+        f"Tie-heavy scores: GPU V2 kept {len(gpu_keep)}, CPU kept {len(cpu_keep)}\n"
+        f"  only in CPU: {sorted(cpu_keep - gpu_keep)[:10]}\n"
+        f"  only in GPU: {sorted(gpu_keep - cpu_keep)[:10]}"
     )
 
 # -----------------------------------------------------------------------------

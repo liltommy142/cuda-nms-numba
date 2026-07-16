@@ -39,6 +39,19 @@ try:
 except ImportError:
     _NUMBA_AVAILABLE = False
 
+    # Without this, `@cuda.jit` below would raise NameError at import time
+    # (cuda is never bound) instead of reaching the friendly "ERROR: numba is
+    # not installed" message in main() -- this dummy lets the module import
+    # cleanly on a machine without numba; actually calling a kernel still
+    # fails, but only once _NUMBA_AVAILABLE has already been checked.
+    class _CudaDummy:
+        def jit(self, *args, **kwargs):
+            if len(args) == 1 and callable(args[0]) and not kwargs:
+                return args[0]      # bare `@cuda.jit` usage
+            return lambda f: f      # parametrized `@cuda.jit(...)` usage
+
+    cuda = _CudaDummy()
+
 # ── tunable constants ─────────────────────────────────────────────────────────
 # 16×16 = 256 threads/block — a common sweet spot for 2-D grid kernels.
 # Each thread block covers a 16×16 tile of the N×N IoU matrix.
@@ -137,6 +150,8 @@ def run_gpu_v1(
     keep : (K,) int64  indices of kept boxes in original array, descending score
     """
     n = len(boxes)
+    if n == 0:
+        return np.array([], dtype=np.int64)
     order = np.argsort(-scores, kind="stable")   # stable: deterministic on score ties
 
     # Sort boxes/scores into score-descending order before uploading.

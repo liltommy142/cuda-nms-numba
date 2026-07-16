@@ -59,9 +59,14 @@ _TPB = 256
 
 @cuda.jit(fastmath=True)
 def _iou_max_kernel(x1, y1, x2, y2, iou_max_out, n):
-    i = cuda.blockIdx.x
-    tx = cuda.threadIdx.x
-    
+    """One block (256 threads) per box i. Writes iou_max_out[i] = the largest
+    IoU between box i and any higher-scored box (index < i, since boxes
+    arrive sorted by score descending) -- _decay_scores_kernel uses this value
+    to decide how much box i's own score should decay.
+    """
+    i = cuda.blockIdx.x   # one block owns exactly one output element, iou_max_out[i]
+    tx = cuda.threadIdx.x  # this thread's lane within the block, 0..255
+
     if i >= n:
         return
 
@@ -69,18 +74,22 @@ def _iou_max_kernel(x1, y1, x2, y2, iou_max_out, n):
     area_i = (xi2 - xi) * (yi2 - yi)
 
     local_max = 0.0
-    
+
+    # Grid-stride loop: up to `i` higher-scored candidates split across 256
+    # threads, so thread tx checks candidates tx, tx+256, tx+512, ... This
+    # keeps all 256 threads busy regardless of how large i is, instead of
+    # e.g. only using the first `i` threads and idling the rest.
     for k in range(tx, i, cuda.blockDim.x):
         xk = x1[k]; yk = y1[k]; xk2 = x2[k]; yk2 = y2[k]
-        
+
         ix1 = max(xi, xk)
         iy1 = max(yi, yk)
         ix2 = min(xi2, xk2)
         iy2 = min(yi2, yk2)
-        
+
         iw = ix2 - ix1
         ih = iy2 - iy1
-        
+
         if iw > 0.0 and ih > 0.0:
             inter = iw * ih
             area_k = (xk2 - xk) * (yk2 - yk)
@@ -89,10 +98,16 @@ def _iou_max_kernel(x1, y1, x2, y2, iou_max_out, n):
             if iou > local_max:
                 local_max = iou
 
+    # Tree reduction: fold the 256 per-thread partial maxima (one per lane,
+    # each already the max over that lane's strided subset) down to a single
+    # block-wide max. Each pass compares pairs `stride` apart and halves
+    # `stride`; cuda.syncthreads() between passes is required so every thread
+    # sees the previous pass's shared-memory writes before reading them
+    # (256 -> 128 -> 64 -> ... -> 1, one live comparison per remaining thread).
     s_max = cuda.shared.array(shape=(256,), dtype=nb_float32)
     s_max[tx] = local_max
     cuda.syncthreads()
-    
+
     stride = 128
     while stride > 0:
         if tx < stride:
@@ -100,16 +115,24 @@ def _iou_max_kernel(x1, y1, x2, y2, iou_max_out, n):
                 s_max[tx] = s_max[tx + stride]
         cuda.syncthreads()
         stride //= 2
-        
-    if tx == 0:
+
+    if tx == 0:  # after the last pass, s_max[0] holds the block-wide max
         iou_max_out[i] = s_max[0]
 
 
 @cuda.jit(fastmath=True)
 def _decay_scores_kernel(x1, y1, x2, y2, scores, iou_max, n, method, sigma):
-    j = cuda.blockIdx.x
-    tx = cuda.threadIdx.x
-    
+    """One block (256 threads) per box j. Multiplies scores[j] in place by
+    the smallest decay factor contributed by any higher-scored box i (index
+    < j) that overlaps it -- this is Matrix NMS's "soft suppression": scores
+    are shrunk based on overlap instead of the box being deleted outright.
+    Requires _iou_max_kernel to have already finished for every index (see
+    the cuda.synchronize() between the two kernel launches in
+    run_gpu_v3_matrix_nms).
+    """
+    j = cuda.blockIdx.x   # one block owns exactly one score, scores[j]
+    tx = cuda.threadIdx.x  # this thread's lane within the block, 0..255
+
     if j >= n:
         return
 
@@ -118,6 +141,9 @@ def _decay_scores_kernel(x1, y1, x2, y2, scores, iou_max, n, method, sigma):
 
     local_min_decay = 1.0
 
+    # Grid-stride loop over the (up to j) higher-scored boxes, same pattern
+    # as _iou_max_kernel above: 256 threads split up to j candidates so lane
+    # tx handles i = tx, tx+256, tx+512, ...
     for i in range(tx, j, cuda.blockDim.x):
         xi = x1[i]; yi = y1[i]; xi2 = x2[i]; yi2 = y2[i]
         
@@ -150,10 +176,15 @@ def _decay_scores_kernel(x1, y1, x2, y2, scores, iou_max, n, method, sigma):
                 if decay < local_min_decay:
                     local_min_decay = decay
 
+    # Same tree-reduction pattern as _iou_max_kernel above, but folding down
+    # to a MIN instead of a MAX: box j's final decay is the strictest (i.e.
+    # smallest) decay factor contributed by any higher-scored overlapping
+    # box -- one bad overlap is enough to suppress j, so we can't just
+    # average or take any single lane's value.
     s_min = cuda.shared.array(shape=(256,), dtype=nb_float32)
     s_min[tx] = local_min_decay
     cuda.syncthreads()
-    
+
     stride = 128
     while stride > 0:
         if tx < stride:
@@ -161,8 +192,8 @@ def _decay_scores_kernel(x1, y1, x2, y2, scores, iou_max, n, method, sigma):
                 s_min[tx] = s_min[tx + stride]
         cuda.syncthreads()
         stride //= 2
-        
-    if tx == 0:
+
+    if tx == 0:  # after the last pass, s_min[0] holds the block-wide min
         scores[j] = scores[j] * s_min[0]
 
 

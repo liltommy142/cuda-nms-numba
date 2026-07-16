@@ -1,4 +1,4 @@
-"""GPU V2 -- Coalesced SoA IoU Kernel + Full On-Device Greedy Suppression.
+"""GPU V2 -- Coalesced SoA IoU Kernel + GPU-Computed Suppression Bitmask.
 
 Proposal reference (GPU V2 row):
     "GPU V1 + batched NMS using parallel reduction to build the suppression mask
@@ -14,34 +14,45 @@ Two key improvements over GPU V1:
    V2: SoA x1[N],y1[N],x2[N],y2[N], thread stride=4 bytes -> coalesced
    (single 128-byte L2 transaction per warp of 32 threads).
 
-2. Full on-device greedy suppression -- _nms_suppression_kernel:
+2. GPU-computed suppression bitmask -- _nms_bitmask_kernel:
    V1 bottlenecks:
-     a. Download N*N IoU matrix to CPU (~80-120ms at N=10000, PCIe 400MB)
-     b. CPU NumPy suppression loop (~100-150ms at N=10000)
-   V2 fix: ONE kernel handles BOTH steps entirely on GPU:
-     - Sequential outer loop (anchor i) -- thread 0 checks suppressed[i]
-       and broadcasts via shared memory (zero overhead, one syncthreads)
-     - Parallel inner loop -- all 256 threads simultaneously mark
-       suppressed[j] for j in [i+1, N) where iou_matrix[i,j] > threshold
-     - cuda.syncthreads() ensures write visibility between outer iterations
-     - IoU matrix stays on GPU; only O(N) bool array downloaded (~10KB)
-
-Why NOT N individual small kernel launches (the naive per-anchor GPU approach):
-   N kernel launches + N cuda.synchronize() + N d_suppressed[i] element reads
-   = N * (5-50 us overhead) = 5-50ms of pure overhead at N=1000, before any
-   GPU compute. The single-kernel approach avoids ALL of this.
+     a. Download N*N float32 IoU matrix to CPU (~80-120ms at N=10000, PCIe ~400MB)
+     b. CPU NumPy suppression loop reading that matrix row by row
+   V2 fix: the kernel computes, for every box i, a compressed bitmask of
+   which higher-ranked boxes it suppresses (grouped into blocks of 64,
+   packed into uint64 words) -- one thread per anchor box i, comparing
+   against the 64 boxes of a shared-memory-cached target block:
+     - mask_out has shape (ceil(N/64), N); mask_out[by, i]'s bit k means
+       "box i suppresses box (by*64 + k)"
+     - `if by < bx: return` skips column blocks that precede box i's own
+       block, since box i can only suppress higher-index (lower-score) boxes
+     - only the downloaded bitmask is O(N^2/64), not the full O(N^2) IoU
+       matrix -- NOT O(N), see PCIe comparison below
+   The final "which rank is actually kept" decision still runs as a serial
+   Python loop on the CPU (run_gpu_v2 step 5): for each box i in score order,
+   check whether it was already suppressed by an earlier kept box, then if
+   kept, OR its suppression bitmask into the running `suppressed` state.
+   This loop is O(N) iterations of O(N/64) array-OR each -- much cheaper
+   than V1's O(N) row-scans of a dense N-wide row, but it is NOT eliminated;
+   V2 does not do 100% of suppression on-device (that's what V3 does instead,
+   via a different algorithm entirely -- see gpu_v3.py).
 
 PCIe comparison:
-    V1: O(N) upload + O(N^2) download (IoU matrix, ~400MB at N=10000)
-    V2: O(N) upload + O(N)   download (suppressed bool, ~10KB at N=10000)
-    V2 eliminates the O(N^2) PCIe bottleneck entirely.
+    V1: O(N) upload + O(N^2)   download (IoU matrix, ~400MB at N=10000)
+    V2: O(N) upload + O(N^2/64) download (bitmask, ~12.5MB at N=10000)
+    V2 shrinks the O(N^2) PCIe cost ~64x -- it does NOT eliminate it, and the
+    docstring previously (incorrectly) claimed it did; see run_gpu_v2's step 2
+    comment for a related fix (the bitmask buffer no longer needs a host-side
+    zero-fill upload before the kernel runs).
 
-Expected speedup at N=10,000:
+Expected speedup at N=10,000 -- theoretical, NOT yet measured on real GPU
+(see README.md "Trạng thái số liệu"):
     Bottleneck analysis:
-      IoU kernel (coalesced) : ~10-20ms
-      Suppression kernel     :  ~5-15ms  (256 threads, inner read bandwidth)
-      PCIe suppressed O(N)   :  ~0.1ms
-      Total V2               : ~15-35ms
+      IoU kernel (coalesced)     : ~10-20ms
+      Bitmask kernel             :  ~5-15ms  (64 threads/block, shared-mem cached)
+      PCIe bitmask download      :  ~1-2ms   (~12.5MB, not the ~0.1ms an O(N) download would be)
+      CPU OR-reduction loop      :  a few ms (N iterations, O(N/64) array-OR each)
+      Total V2                   : ~20-40ms
     CPU baseline at N=10000  : ~1.2s
     Speedup                  : ~35-80x (comfortably >= 15x target)
 
@@ -66,12 +77,26 @@ from gpu_v1 import run_gpu_v1              # noqa: E402
 try:
     from numba import cuda
     from numba import float32 as nb_float32
-    from numba import int32 as nb_int32
     from numba import uint64 as nb_uint64
 
     _NUMBA_AVAILABLE = True
 except ImportError:
     _NUMBA_AVAILABLE = False
+    nb_float32 = None
+    nb_uint64 = None
+
+    # Without this, `@cuda.jit` below would raise NameError at import time
+    # (cuda is never bound) instead of reaching the friendly "ERROR: numba is
+    # not installed" message in main() -- this dummy lets the module import
+    # cleanly on a machine without numba; actually calling a kernel still
+    # fails, but only once _NUMBA_AVAILABLE has already been checked.
+    class _CudaDummy:
+        def jit(self, *args, **kwargs):
+            if len(args) == 1 and callable(args[0]) and not kwargs:
+                return args[0]      # bare `@cuda.jit` usage
+            return lambda f: f      # parametrized `@cuda.jit(...)` usage
+
+    cuda = _CudaDummy()
 
 # 2-D IoU kernel block size: 16x16 = 256 threads (same as V1)
 _TPB = (16, 16)
@@ -283,11 +308,15 @@ def run_gpu_v2(
     # 1. Upload SoA boxes
     d_x1, d_y1, d_x2, d_y2 = _boxes_to_soa_device(boxes_sorted)
     
-    # 2. Allocate and initialize bitmask
+    # 2. Allocate bitmask (left uninitialized -- see step 5: the host-side
+    # reduction only ever reads mask_cpu[by, i] for by >= i's own block,
+    # which is exactly the region the kernel guarantees to write via its
+    # `if by < bx: return` guard. Rows before that are never read, so there
+    # is no need to zero-fill the whole (M, n) array on the host and pay an
+    # extra O(N^2/64) upload for it -- that would silently reintroduce the
+    # PCIe cost this design is meant to avoid.
     M = (n + 63) // 64
     d_mask = cuda.device_array((M, n), dtype=np.uint64)
-    # Important: Numba device_array is uninitialized, so we must zero it.
-    d_mask.copy_to_device(np.zeros((M, n), dtype=np.uint64))
 
     # 3. Launch parallel reduction mask kernel
     bpg_x = M
@@ -304,17 +333,21 @@ def run_gpu_v2(
     # 5. CPU bitwise OR reduction
     suppressed = np.zeros(M, dtype=np.uint64)
     keep_ranks = []
-    
+
     for i in range(n):
         block_idx = i // 64
         bit_idx = i % 64
         is_suppressed = (suppressed[block_idx] & (np.uint64(1) << np.uint64(bit_idx))) != 0
-        
+
         if is_suppressed:
             continue
-            
+
         keep_ranks.append(i)
-        suppressed |= mask_cpu[:, i]
+        # Only rows by >= block_idx were ever written by the kernel (by < bx
+        # is skipped on-device since box i can never suppress a box in an
+        # earlier 64-block); slicing from block_idx avoids touching the
+        # uninitialized rows above it.
+        suppressed[block_idx:] |= mask_cpu[block_idx:, i]
 
     return order[np.array(keep_ranks, dtype=np.int64)]
 
