@@ -1,5 +1,7 @@
 # Chuẩn bị thuyết trình seminar — Nhóm 11 (Real-Time NMS on GPU)
 
+> 🧭 Về [docs/INDEX.md](../docs/INDEX.md) · Giải thích thuật ngữ xem [docs/GLOSSARY.md](../docs/GLOSSARY.md), giải thích code/kiến trúc chi tiết xem [docs/TECHNICAL_DOCUMENTATION.md](../docs/TECHNICAL_DOCUMENTATION.md).
+>
 > Thay thế hoàn toàn 4 file cũ trong `docs/` (`SLIDE_CONTENT.md`, `PRESENT_SCRIPT.md`, `PRESENTATION_NOTES.md`, `QA_PREP.md`) — các file đó viết từ lúc chỉ có CPU baseline + GPU V1, giờ V2 và V3 đã có code nên nội dung cũ sai ("V2 ⏳", "V3 ⏳ chưa có code"). Đây là bộ tài liệu viết lại từ đầu, dựa trên đúng trạng thái code hiện tại + bài học rút ra từ feedback thật của 12 nhóm khác trong lớp.
 
 ## Các file trong folder này
@@ -13,7 +15,15 @@
 
 Google Slides hiện có (từ bản cũ, **cần cập nhật lại nội dung theo bộ tài liệu mới này** trước khi thuyết trình): https://docs.google.com/presentation/d/10enq7N5OOawB4k1h8jwsGlImZjNQYfnySDcQV4pCLOE/edit?usp=sharing
 
-**⚠️ Cần thống nhất với Tân**: commit `10f3026` (16/07) đã thêm `docs/Slide_Proposal.pptx` — 1 bản slide thật, 15 slide, đã có đủ 3 phần V1/V2/V3 (kể cả sơ đồ kiến trúc, không chỉ text). Bộ tài liệu trong `presentation/` này viết **độc lập**, chưa đối chiếu với bản pptx đó. Đã rà nhanh nội dung text của pptx và thấy 1 điểm hay bản outline ở đây thiếu, đã bổ sung vào Slide 6 + `QA_PREP.md` mục F: **V3 (soft suppression) giải quyết đúng trường hợp 2 vật thể khác nhau đứng sát nhau bị hard NMS (V1/V2) xoá nhầm** — không chỉ là đánh đổi tốc độ mà còn sửa đúng 1 lỗi thật. Trước khi thuyết trình, 2 bạn nên thống nhất dùng bản pptx của Tân làm slide chính (khớp với cấu trúc `OUTLINE_AND_CONTENT.md` ở đây khá sát — cùng 3 slide kiến trúc riêng cho V1/V2/V3) và dùng `SCRIPT.md`/`QA_PREP.md`/`CROSS_GROUP_LESSONS.md` ở đây làm phần chuẩn bị nói + hỏi-đáp đi kèm, tránh làm 2 bản slide riêng biệt.
+**✅ Đã đối chiếu với `Slide_Proposal.pptx`** (commit `10f3026`, 15 slide, đã có đủ 3 phần V1/V2/V3 kể cả sơ đồ kiến trúc dạng ảnh). `OUTLINE_AND_CONTENT.md` và `SCRIPT.md` đã được viết lại để khớp đúng thứ tự/tiêu đề 15 slide của bản pptx — không xoá nội dung cũ, chỉ renumber + gộp. Dùng bản pptx của Tân làm slide chính khi trình bày, `SCRIPT.md`/`QA_PREP.md`/`CROSS_GROUP_LESSONS.md` làm phần chuẩn bị nói + hỏi-đáp đi kèm.
+
+Các điểm đáng chú ý phát hiện khi đối chiếu trực tiếp với nội dung pptx (kể cả các slide chỉ có hình, đã trích xuất ảnh để đọc):
+
+1. **V3 giải quyết lỗi hard NMS xoá nhầm 2 vật thể sát nhau** — đã có sẵn trong pptx (Slide 13), khớp với những gì đã bổ sung trước đó vào `QA_PREP.md` mục F.
+2. **2 slide "hạn chế" mới, chưa từng có trong bộ tài liệu cũ**: Slide 9 (hạn chế V1: PCIe bottleneck + sequential suppression loop) và **Slide 11 (hạn chế V2 — quan trọng, dễ bị hỏi)**: dù đã batch + tối ưu phần cứng, V2 *vẫn* mang bản chất Greedy NMS (vẫn phụ thuộc tuần tự), parallel reduction chỉ giảm độ trễ chứ chưa loại bỏ được tư duy so sánh tuần tự — đây là lý do chính đáng cho việc cần đổi hẳn thuật toán ở V3. Đã thêm vào `OUTLINE_AND_CONTENT.md`/`SCRIPT.md`.
+3. **Matrix NMS có 3 ưu điểm được liệt kê rõ trong pptx** (Slide 12): tốc độ, độ chính xác cao (không xoá nhầm), và không tốn tài nguyên huấn luyện (là bước hậu xử lý, không cần train lại model) — bổ sung thêm ý thứ 3 này, trước đây bộ tài liệu chỉ nhấn tốc độ + đúng đắn.
+4. **pptx chưa có slide riêng cho**: kết quả đo thật (bảng CPU vs GPU V1), trạng thái từng version, bảng mục tiêu 75/100/125% chi tiết, và phân công công việc — các mục này chỉ có bản rút gọn ở Slide 6 "Roadmap" (1×→5-10×→15×→30-80×, khớp với bảng mục tiêu). Đã giữ nguyên toàn bộ nội dung cũ này ở cuối `OUTLINE_AND_CONTENT.md`, đánh dấu `[CHƯA CÓ TRONG PPTX]` — **2 bạn cần quyết định có thêm slide cho phần này vào pptx hay không** trước khi thuyết trình, vì đây là nội dung giám khảo hay hỏi (số liệu thật, trạng thái trung thực, phân công).
+5. **⚠️ Xung đột số liệu cần thống nhất** — xem mục ngay bên dưới.
 
 ## Trạng thái số liệu — cái gì thật, cái gì đang chờ
 
@@ -26,11 +36,15 @@ Google Slides hiện có (từ bản cũ, **cần cập nhật lại nội dung 
 
 **→ Việc cần làm trước khi hoàn thiện slide**: chạy `gpu_v2.ipynb` và `gpu_v3.ipynb` trên Colab (T4), lấy bảng benchmark thật, rồi thay các chỗ đánh dấu `[CHỜ COLAB]` trong `OUTLINE_AND_CONTENT.md` và `SCRIPT.md` bằng số thật. Cách chạy chi tiết: xem `docs/HOW_TO_RUN.md`.
 
+**Lưu ý chữ "Batched" trong tiêu đề pptx Slide 10** ("GPU v2: Batched NMS & Hardware Optimization"): nghĩa là gom nhóm 64 box/khối để nén bitmask (`_nms_bitmask_kernel`), **không phải** batch size 32 theo catalog A4 (xử lý nhiều ảnh/tập box cùng lúc). Dòng "Batch size 32" trong bảng trạng thái vẫn đúng là **chưa implement** ở cả 3 version — đừng để tên slide gây hiểu lầm là đã làm xong.
+
 Trong lúc soạn bộ tài liệu này, đã tìm và sửa 1 bug: `tests/test_correctness.py` có 4 test gọi `compute_iou_matrix_gpu_v2` nhưng hàm đó chưa tồn tại trong `src/gpu_v2.py` → sẽ lỗi `ImportError` khi chạy trên Colab. Đã thêm hàm này vào `gpu_v2.py` (xem commit liên quan) — cần chạy lại `pytest tests/ -v` trên Colab để xác nhận toàn bộ test V2 pass thật, không chỉ hết lỗi import.
 
 **Đã đính chính 1 sai số liệu quan trọng**: bản trước của tài liệu proposal (`docs/TECHNICAL_DOCUMENTATION.md` và các file `.md` slide cũ đã xoá) ghi CPU baseline N=10.000 là **0.2846s / 0.289s**, và cProfile là **65% suppression / 34% IoU** — số này **chưa từng khớp với bất kỳ output thật nào đã lưu trong repo** (có vẻ là số dự kiến từ bản proposal ban đầu, chưa cập nhật lại sau khi chạy Colab thật). Đã đối chiếu lại với output thật trong `cpu_baseline.ipynb`/`gpu_v1.ipynb` và sửa toàn bộ: CPU N=10.000 thật là **~1.8-2.5s** (tuỳ lần chạy Colab), và tỉ lệ cProfile đúng là **~65% IoU / ~35% suppression loop** — **nhãn bị đảo ngược** trong bản cũ (may mắn là kết luận "IoU là phần nặng nhất và song song hoá được" vẫn đúng, chỉ sai con số/nhãn cụ thể). Đã sửa trong `OUTLINE_AND_CONTENT.md`, `SCRIPT.md`, và `docs/TECHNICAL_DOCUMENTATION.md`.
 
 Đã chạy lại cProfile thật trên máy local để đối chiếu thêm 1 lần nữa — output lưu tại [`cprofile_N10000_local.txt`](cprofile_N10000_local.txt) (file thật đầu tiên trong repo, trước đây tài liệu cũ trích dẫn 1 file `profile_output/cprofile_N10000.txt` chưa từng tồn tại). Kết quả local: 0.449s tổng, ~59% suppression / ~40% IoU — tỉ lệ đảo nhẹ so với Colab (do khác phần cứng), nhưng kết luận không đổi. Xem thêm câu hỏi liên quan trong `QA_PREP.md` mục H.
+
+**⚠️ Cần thống nhất trước khi thuyết trình — pptx Slide 4 (CPU Baseline thực tế) dùng lại đúng bộ số "cũ"**: pptx của Tân có 1 bảng ghi rõ nhãn "đo trong proposal" — N=100 → 0.0008s, N=1.000 → 0.0103s, N=10.000 → **0.2846s** — và text đi kèm nói **65% suppression loop / 34% IoU**. Đây chính xác là bộ số mà đoạn trên đã gọi là "chưa từng khớp với output thật nào đã lưu trong repo" và "nhãn bị đảo ngược". Vì pptx tự gắn nhãn rõ ràng "đo trong proposal" (không claim là số Colab đã verify), 2 cách xử lý hợp lý: (1) giữ nguyên bảng đó như số liệu lịch sử/motivation ban đầu (không xoá — pptx đã ghi rõ ngữ cảnh), và khi tới phần kết quả benchmark chính thức thì dùng số Colab verify (2.4918s, 65% IoU/35% suppression) — đã làm theo hướng này trong `OUTLINE_AND_CONTENT.md` Slide 4 + `SCRIPT.md`; hoặc (2) nếu 2 bạn xác nhận số "đo trong proposal" đó thực ra mới là số đúng (ví dụ do cProfile trên Colab từng chạy lại và ra kết quả này thật, chỉ là chưa lưu output), thì cần cập nhật ngược lại bảng "Trạng thái số liệu" ở trên. **Không tự ý chọn 1 trong 2 hướng — 2 bạn cần xác nhận nguồn gốc con số 0.2846s trước khi chốt slide cuối.**
 
 ## Nguyên tắc khi chỉnh sửa nội dung
 
