@@ -238,6 +238,27 @@ def _boxes_to_soa_device(boxes: np.ndarray):
     )
 
 
+def compute_iou_matrix_gpu_v2(boxes: np.ndarray) -> np.ndarray:
+    """Run the coalesced SoA IoU kernel alone and return the (N, N) matrix on host.
+
+    Exists separately from run_gpu_v2 so tests can check the coalesced kernel's
+    numerical output (diagonal, symmetry, match vs CPU/V1) in isolation from the
+    bitmask suppression pipeline.
+    """
+    n = boxes.shape[0]
+    d_x1, d_y1, d_x2, d_y2 = _boxes_to_soa_device(boxes)
+    d_iou = cuda.device_array((n, n), dtype=np.float32)
+
+    bpg = (
+        (n + _TPB[0] - 1) // _TPB[0],
+        (n + _TPB[1] - 1) // _TPB[1],
+    )
+    _iou_matrix_coalesced_kernel[bpg, _TPB](d_x1, d_y1, d_x2, d_y2, d_iou)
+    cuda.synchronize()
+
+    return d_iou.copy_to_host()
+
+
 def run_gpu_v2(
     boxes: np.ndarray,
     scores: np.ndarray,

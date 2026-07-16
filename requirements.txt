@@ -1,7 +1,13 @@
 numpy
 torch
 torchvision
-numba
+numba==0.59.1  # pinned: numba 0.66.0 (latest as of writing) fails to JIT-compile this project's
+               # CUDA kernels (loops/multiple args) with a "Signature mismatch" TypeError in
+               # numba's untyped_passes.FixupArgs -- confirmed locally with a real GPU (RTX 4060 Ti)
+               # on both Python 3.11 and 3.14. 0.59.1 is the only version confirmed to compile these
+               # kernels correctly (0.60-0.65 untested). Use Python 3.11 for best numba/CUDA support.
+               # Colab's notebooks (gpu_v1/v2/v3.ipynb) use Colab's preinstalled numba, not this file,
+               # so this pin mainly matters for local `pip install -r requirements.txt`.
 pytest
 
 # Required by torch.hub's ultralytics/yolov5 hubconf.py (used by load_real_boxes)

@@ -32,15 +32,25 @@ Repo hiện có 2 cài đặt độc lập, cùng interface (`(boxes, scores, io
 
 Một detector như YOLO thường sinh ra **hàng nghìn box ứng viên** cho một ảnh, trong đó rất nhiều box trùng lặp lên cùng một vật thể với độ tin cậy (score) khác nhau. NMS có nhiệm vụ: giữ lại box có score cao nhất tại mỗi vị trí, loại bỏ các box "trùng" có IoU (độ chồng lấp) vượt ngưỡng so với box đã giữ.
 
-Thuật toán NMS truyền thống (greedy NMS, cài trong `run_cpu` — `cpu_baseline.py:71-96`) là **tuần tự và có độ phức tạp O(n²)** trong trường hợp xấu nhất: với mỗi box được giữ, phải so IoU với toàn bộ box còn lại chưa bị loại. Theo profiling trong proposal (đo bằng `cProfile` trên notebook `cpu_baseline.ipynb`, cell "Profiling"), thời gian chạy CPU baseline tăng gần bậc hai theo N:
+Thuật toán NMS truyền thống (greedy NMS, cài trong `run_cpu` — `cpu_baseline.py:71-96`) là **tuần tự và có độ phức tạp O(n²)** trong trường hợp xấu nhất: với mỗi box được giữ, phải so IoU với toàn bộ box còn lại chưa bị loại.
 
-| N | Thời gian CPU (đo trong proposal) |
+> **Đính chính (đã đối chiếu lại với output thật đã lưu trong notebook)**: bản trước của tài liệu này trích số liệu "0.2846s / 65% suppression / 34% IoU" từ bản đề xuất (proposal) ban đầu — đó là số liệu **dự kiến trước khi chạy thật**, chưa từng khớp với bất kỳ lần chạy nào đã lưu trong repo. Bảng và tỉ lệ dưới đây lấy trực tiếp từ output đã lưu thật trong `cpu_baseline.ipynb`/`gpu_v1.ipynb` (chạy trên Colab), không phải số dự kiến.
+
+Theo `benchmark()` đã chạy và lưu output thật trong `cpu_baseline.ipynb` (cell "Demo run + benchmark sweep"), thời gian chạy CPU baseline tăng gần bậc hai theo N:
+
+| N | Thời gian CPU (đo thật, `cpu_baseline.ipynb`) |
 |---|---|
-| 100 | 0.0008 s |
-| 1.000 | 0.0103 s |
-| 10.000 | 0.2846 s |
+| 100 | 0.0063 s |
+| 1.000 | 0.0474 s |
+| 10.000 | 1.8166 s |
 
-Cũng theo proposal, khi profile ở N=10.000, khoảng 65% thời gian nằm ở vòng lặp suppression và ~34% ở hàm tính IoU (`iou_one_to_many`) — tức là **bản thân phép tính NMS, không phải I/O, là nút thắt cổ chai**. Đây chính là động lực để đưa NMS lên GPU: phần tính IoU giữa mọi cặp box là **song song hoàn toàn (embarrassingly parallel)** — IoU(i, j) không phụ thuộc kết quả của bất kỳ cặp nào khác — trong khi phần quyết định "giữ hay loại" lại có **phụ thuộc tuần tự** (số phận của box B phụ thuộc việc box A điểm cao hơn đã được giữ hay chưa). Sự căng thẳng giữa hai đặc tính này là chủ đề xuyên suốt của cả dự án.
+Lưu ý: `gpu_v1.ipynb` đo lại CPU baseline trong cùng 1 lần chạy để so sánh trực tiếp với GPU V1, và ra số hơi khác (100→0.0069s, 1.000→0.1513s, 10.000→**2.4918s**) — chênh lệch giữa 2 lần đo là dao động bình thường của thời lượng Colab cấp phát (CPU/RAM không cố định giữa các phiên), không phải lỗi. Số ở slide "so tốc độ CPU vs GPU V1" (`presentation/OUTLINE_AND_CONTENT.md`) dùng cặp số từ `gpu_v1.ipynb` vì CPU và GPU được đo cùng 1 lần chạy, đảm bảo so sánh công bằng (cùng điều kiện máy).
+
+Theo cell "Profiling" trong `cpu_baseline.ipynb` (cProfile thật ở N=10.000, `sort_stats("cumulative")`, chạy trên Colab): trong tổng thời gian tính toán thuần của thuật toán (loại trừ overhead đo đạc/IPython), hàm tính IoU (`iou_one_to_many`, gọi 6.100 lần) chiếm **tottime 0.837s (~65%)**, phần thân vòng lặp `run_cpu` (sort, bookkeeping suppression — không tính thời gian bên trong `iou_one_to_many`) chiếm **tottime 0.459s (~35%)**. Tỉ lệ 65/34% trùng hợp gần giống bản dự kiến cũ, nhưng **nhãn bị đảo ngược trong bản cũ** (bản cũ ghi 65% là suppression loop, 34% là IoU — thực tế IoU mới là phần chiếm nhiều hơn).
+
+Đã chạy lại cProfile y hệt (cùng `N=10.000, seed=0`) trên máy local (Python 3.11.9, NumPy 1.26.4, Windows) để đối chiếu — kết quả lưu tại [`presentation/cprofile_N10000_local.txt`](../presentation/cprofile_N10000_local.txt): tổng **0.449s**, `run_cpu` tottime 0.266s (~59%), `iou_one_to_many` tottime 0.181s (~40%). Tỉ lệ đảo ngược nhẹ so với Colab (59/40 thay vì 35/65) — đây là khác biệt **phần cứng** (CPU máy local nhanh hơn cho phép NumPy vector hoá, khiến phần vòng lặp Python thuần tương đối chiếm tỉ trọng lớn hơn), không phải sai số đo. Kết luận không đổi ở cả 2 lần đo: **cả 2 phần đều chiếm tỉ trọng đáng kể, bản thân thuật toán NMS — không phải I/O — là bottleneck**.
+
+Điều này càng củng cố động lực đưa NMS lên GPU: phần tính IoU giữa mọi cặp box — luôn chiếm tỉ trọng lớn ở cả 2 lần đo — cũng chính là phần **song song hoàn toàn (embarrassingly parallel)** — IoU(i, j) không phụ thuộc kết quả của bất kỳ cặp nào khác — trong khi phần quyết định "giữ hay loại" lại có **phụ thuộc tuần tự** (số phận của box B phụ thuộc việc box A điểm cao hơn đã được giữ hay chưa). Sự căng thẳng giữa hai đặc tính này là chủ đề xuyên suốt của cả dự án.
 
 ### 1.3 Kiến trúc hệ thống
 
