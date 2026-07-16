@@ -1,6 +1,6 @@
-numpy
-torch
-torchvision
+numpy==1.26.4
+torch==2.5.1
+torchvision==0.20.1
 numba==0.59.1  # pinned: numba 0.66.0 (latest as of writing) fails to JIT-compile this project's
                # CUDA kernels (loops/multiple args) with a "Signature mismatch" TypeError in
                # numba's untyped_passes.FixupArgs -- confirmed locally with a real GPU (RTX 4060 Ti)
@@ -8,22 +8,26 @@ numba==0.59.1  # pinned: numba 0.66.0 (latest as of writing) fails to JIT-compil
                # kernels correctly (0.60-0.65 untested). Use Python 3.11 for best numba/CUDA support.
                # Colab's notebooks (gpu_v1/v2/v3.ipynb) use Colab's preinstalled numba, not this file,
                # so this pin mainly matters for local `pip install -r requirements.txt`.
-pytest
+pytest==9.1.1
+pillow==12.2.0
+psutil==7.2.2
+requests==2.34.2
+urllib3==2.7.0
+packaging==26.2
+PyYAML==6.0.3
 
-# Required by torch.hub's ultralytics/yolov5 hubconf.py (used by load_real_boxes)
+# Required by torch.hub's ultralytics/yolov5 hubconf.py (used by load_real_boxes).
+# NOT version-pinned: this --real-boxes code path has not been exercised end-to-end
+# in the environment these pins were captured from (these packages aren't installed
+# there), so pinning specific versions here would imply a verification that hasn't
+# happened. Pin these once someone actually runs `--real-boxes` successfully.
 ultralytics
 pandas
 seaborn
 matplotlib
 opencv-python
-pillow
 scipy
-psutil
 gitpython
-requests
 tqdm
 thop
-PyYAML
-packaging
 setuptools
-urllib3
