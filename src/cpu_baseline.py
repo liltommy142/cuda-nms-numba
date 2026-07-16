@@ -39,6 +39,10 @@ def load_real_boxes(image_paths=None, conf_threshold=0.25):
 
     model = torch.hub.load("ultralytics/yolov5", "yolov5s", pretrained=True, trust_repo=True)
     model.conf = conf_threshold
+    # AutoShape runs its own NMS internally before returning results; disable it
+    # (iou=1.0 keeps virtually all overlapping candidates) so load_real_boxes returns
+    # raw pre-NMS boxes for this project's own run_cpu/run_gpu_v1 to suppress.
+    model.iou = 1.0
     if not image_paths:
         image_paths = ["https://ultralytics.com/images/zidane.jpg"]
 
@@ -140,6 +144,7 @@ def main():
     parser.add_argument("--iou-threshold", type=float, default=0.5)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--real-boxes", action="store_true", help="use YOLOv5s detections instead of synthetic boxes")
+    parser.add_argument("--conf-threshold", type=float, default=0.25, help="YOLOv5s confidence threshold (--real-boxes only); lower = more raw boxes")
     parser.add_argument("--verify", action="store_true", help="compare against torchvision.ops.nms")
     parser.add_argument("--benchmark", action="store_true", help="sweep N in {100, 1000, 10000}")
     args = parser.parse_args()
@@ -149,7 +154,7 @@ def main():
         return
 
     if args.real_boxes:
-        boxes, scores = load_real_boxes()
+        boxes, scores = load_real_boxes(conf_threshold=args.conf_threshold)
         print(f"Loaded {len(boxes)} real boxes from YOLOv5s")
     else:
         boxes, scores = load_data(args.n, seed=args.seed)
