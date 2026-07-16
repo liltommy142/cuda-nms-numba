@@ -1,5 +1,7 @@
 # Hướng dẫn tự chạy code & test
 
+> 🧭 Về [docs/INDEX.md](INDEX.md) · Giải thích khái niệm/thuật ngữ xem [docs/GLOSSARY.md](GLOSSARY.md), giải thích code chi tiết xem [docs/TECHNICAL_DOCUMENTATION.md](TECHNICAL_DOCUMENTATION.md).
+>
 > Ghi chú nhanh để không phải hỏi lại — chạy trực tiếp trên máy, không cần AI hỗ trợ.
 
 ## 1. Chạy trên Google Colab (có GPU T4 thật)

@@ -1,8 +1,12 @@
 # Tài liệu kỹ thuật: cuda-nms-numba
 
-> **Phạm vi tài liệu**: Toàn bộ nội dung dưới đây được rút ra trực tiếp từ mã nguồn hiện có trong repo (`src/cpu_baseline.py`, `src/gpu_v1.py`, `tests/test_correctness.py`, `src/cpu_baseline.ipynb`, `src/gpu_v1.ipynb`) và từ tài liệu đề xuất dự án (`CSC14116 - Proposal.docx`). Những số liệu benchmark được trích từ proposal sẽ được ghi rõ nguồn — tài liệu này không tự chạy lại benchmark hay bịa số liệu.
+> 🧭 Đây là tài liệu kỹ thuật chi tiết nhất trong repo. Nếu mới đọc lần đầu, nên bắt đầu từ **[docs/INDEX.md](INDEX.md)** (trang mục lục tổng, kiểu Obsidian vault) thay vì đọc thẳng file này từ đầu — INDEX.md sẽ dẫn đúng phần cần đọc theo mục đích của bạn. Các thuật ngữ kỹ thuật dùng trong tài liệu này được giải thích tập trung ở **[docs/GLOSSARY.md](GLOSSARY.md)**.
 >
-> **Trạng thái mã nguồn tại thời điểm viết tài liệu**: đã có **CPU baseline** và **GPU V1**. **GPU V2** (batched NMS + parallel reduction) và **GPU V3** (Matrix NMS) mới chỉ tồn tại dưới dạng kế hoạch trong proposal, chưa có code — phần nào trong tài liệu này nói về V2/V3 sẽ được đánh dấu rõ là "kế hoạch", không phải mã đã triển khai.
+> **Phạm vi tài liệu**: Toàn bộ nội dung dưới đây được rút ra trực tiếp từ mã nguồn hiện có trong repo (`src/cpu_baseline.py`, `src/gpu_v1.py`, `src/gpu_v2.py`, `src/gpu_v3.py`, `tests/test_correctness.py`, và 4 notebook `src/*.ipynb`) và từ tài liệu đề xuất dự án (`CSC14116 - Proposal.docx`). Những số liệu benchmark được trích từ proposal hoặc từ output đã lưu thật sẽ được ghi rõ nguồn — tài liệu này không tự chạy lại benchmark hay bịa số liệu.
+>
+> **Trạng thái mã nguồn tại thời điểm cập nhật gần nhất**: cả 4 cài đặt — **CPU baseline**, **GPU V1**, **GPU V2** (coalesced SoA + bitmask suppression), **GPU V3** (Matrix NMS) — đều đã có code đầy đủ trong `src/`. CPU baseline và GPU V1 đã đo tốc độ thật trên Colab T4; GPU V2/V3 code đã xong và có test tự động nhưng **benchmark tốc độ thật trên GPU vẫn đang chờ chạy** — số liệu tốc độ V2/V3 trong tài liệu này được đánh dấu rõ `[kỳ vọng, chưa verify]` ở bất kỳ chỗ nào chưa có số đo thật. Xem trạng thái số liệu đầy đủ, cập nhật nhất tại [`presentation/README.md`](../presentation/README.md#trạng-thái-số-liệu--cái-gì-thật-cái-gì-đang-chờ).
+>
+> ⚠️ **Bản trước của tài liệu này** (trước khi V2/V3 có code) ghi rằng GPU V2/V3 "mới chỉ tồn tại dưới dạng kế hoạch trong proposal, chưa có code" — điều đó **không còn đúng**; cả hai đã được triển khai đầy đủ trong `src/gpu_v2.py` và `src/gpu_v3.py` (xem [mục 2.5](#25-gpu_v2py--giải-thích-từng-hàm-và-cuda-kernel), [mục 2.6](#26-gpu_v3py--giải-thích-từng-hàm-và-cuda-kernel)).
 
 ---
 
@@ -56,21 +60,29 @@ Theo cell "Profiling" trong `cpu_baseline.ipynb` (cProfile thật ở N=10.000, 
 
 ```
 cuda-nms-numba/
-├── README.md                       # hướng dẫn cài đặt & chạy nhanh
+├── README.md                        # hướng dẫn cài đặt & chạy nhanh
 ├── requirements.txt                 # numpy, torch, torchvision, numba, pytest
-├── CSC14116 - Proposal.docx          # đề xuất dự án (vấn đề, kế hoạch, phân công)
+├── CSC14116 - Proposal.docx         # đề xuất dự án (vấn đề, kế hoạch, phân công)
 ├── src/
-│   ├── cpu_baseline.py               # NMS tuần tự, NumPy thuần
-│   ├── cpu_baseline.ipynb            # bản notebook (chạy trên Colab/Kaggle, không cần GPU)
-│   ├── gpu_v1.py                     # NMS GPU V1: kernel IoU song song + suppression trên host
-│   └── gpu_v1.ipynb                  # bản notebook GPU V1 (cần GPU runtime)
+│   ├── cpu_baseline.py              # NMS tuần tự, NumPy thuần (ground truth nội bộ)
+│   ├── cpu_baseline.ipynb           # bản notebook (chạy trên Colab/Kaggle, không cần GPU)
+│   ├── gpu_v1.py                    # GPU V1: kernel IoU N×N song song + suppression trên host
+│   ├── gpu_v1.ipynb                 # bản notebook GPU V1 (cần GPU runtime)
+│   ├── gpu_v2.py                    # GPU V2: coalesced SoA IoU kernel + bitmask suppression
+│   ├── gpu_v2.ipynb                 # bản notebook GPU V2 (cần GPU runtime)
+│   ├── gpu_v3.py                    # GPU V3: Matrix NMS (soft suppression, không còn CPU loop)
+│   └── gpu_v3.ipynb                 # bản notebook GPU V3 (cần GPU runtime)
 ├── tests/
-│   └── test_correctness.py           # đối chiếu CPU ↔ GPU ↔ torchvision
+│   └── test_correctness.py          # đối chiếu CPU ↔ GPU V1 ↔ GPU V2 ↔ torchvision (V3: sanity check riêng)
+├── presentation/                    # tài liệu chuẩn bị thuyết trình seminar — xem presentation/README.md
 └── docs/
-    └── TECHNICAL_DOCUMENTATION.md    # tài liệu này
+    ├── INDEX.md                     # 🧭 bắt đầu từ đây — mục lục tổng của cả repo
+    ├── GLOSSARY.md                  # bảng thuật ngữ dùng chung
+    ├── TECHNICAL_DOCUMENTATION.md   # tài liệu này
+    └── HOW_TO_RUN.md                # hướng dẫn tự chạy code & test, không cần AI hỗ trợ
 ```
 
-Cả hai script (`cpu_baseline.py`, `gpu_v1.py`) đều có CLI riêng (`--n`, `--iou-threshold`, `--seed`, `--verify`, `--benchmark`) và đều gọi chung `load_data()` để sinh dữ liệu tổng hợp giống hệt nhau — điều này đảm bảo khi so sánh tốc độ/độ chính xác giữa CPU và GPU, hai bên xuất phát từ **cùng một tập input** (cùng seed). `gpu_v1.py` còn `import` trực tiếp `load_data` và `run_cpu` từ `cpu_baseline.py` (dòng 34) để tái sử dụng logic, tránh trùng lặp code.
+Cả 4 script (`cpu_baseline.py`, `gpu_v1.py`, `gpu_v2.py`, `gpu_v3.py`) đều có CLI riêng (`--n`, `--iou-threshold`, `--seed`, `--verify`, `--benchmark`) và đều gọi chung `load_data()` (định nghĩa trong `cpu_baseline.py`) để sinh dữ liệu tổng hợp giống hệt nhau — điều này đảm bảo khi so sánh tốc độ/độ chính xác giữa CPU và GPU, các bên xuất phát từ **cùng một tập input** (cùng seed). `gpu_v1.py` `import` trực tiếp `load_data` và `run_cpu` từ `cpu_baseline.py` để tái sử dụng logic; `gpu_v2.py` lại `import` thêm `run_gpu_v1` từ `gpu_v1.py` (dùng trong `--verify` để đối chiếu chéo cả 2 version GPU) — tránh trùng lặp code giữa các version.
 
 ---
 
@@ -181,9 +193,66 @@ So sánh thời gian `run_cpu` và `run_gpu_v1` với cùng dữ liệu. Có bư
 | Tính **toàn bộ** ma trận IoU N×N thay vì chỉ tính khi cần | Vì bước tính IoU là phần **song song hoàn toàn**, dồn hết phần này cho GPU tận dụng tối đa hàng nghìn thread; đổi lại suppression chỉ còn là tra bảng O(1) trên CPU (`gpu_v1.py:1-15`). |
 | Sắp xếp theo score **trước khi** đưa lên GPU | Suppression cần duyệt theo thứ tự score giảm dần; sắp xếp trước giúp hàng `i` của ma trận IoU tương ứng đúng thứ hạng `i`, nên vòng lặp suppression chỉ cần chỉ số liên tiếp (`i+1:`), không cần tra cứu gián tiếp qua `order` mỗi bước. |
 | `_TPB = (16, 16)` = 256 threads/block | Comment trong code gọi đây là "a common sweet spot for 2-D grid kernels" — 256 threads là bội số của warp size (32) trên GPU NVIDIA, giúp tận dụng tốt phần cứng mà không cần tinh chỉnh riêng cho từng GPU. |
-| Suppression vẫn chạy trên **CPU**, không đưa lên GPU ở V1 | Đây là giới hạn cố ý của "V1" (naive): suppression có phụ thuộc tuần tự (box sau phụ thuộc quyết định của box trước) nên khó song song hoá đơn giản — đó là lý do proposal xếp việc song song hoá suppression vào GPU V2 (parallel reduction) và V3 (Matrix NMS, loại bỏ hẳn phụ thuộc tuần tự bằng soft-suppression). |
+| Suppression vẫn chạy trên **CPU**, không đưa lên GPU ở V1 | Đây là giới hạn cố ý của "V1" (naive): suppression có phụ thuộc tuần tự (box sau phụ thuộc quyết định của box trước) nên khó song song hoá đơn giản — GPU V2 (bitmask + parallel reduction, [mục 2.5](#25-gpu_v2py--giải-thích-từng-hàm-và-cuda-kernel)) và V3 (Matrix NMS, loại bỏ hẳn phụ thuộc tuần tự bằng soft-suppression, [mục 2.6](#26-gpu_v3py--giải-thích-từng-hàm-và-cuda-kernel)) tấn công đúng giới hạn này theo 2 cách khác nhau. |
 | Dùng **Numba `@cuda.jit`**, không viết CUDA C/C++ | Ràng buộc của môn học (ghi rõ trong proposal: "Numba (`@cuda.jit`) — course's official GPU tool, no raw CUDA C/C++"), đồng thời giữ code Python thuần, dễ đọc, dễ so sánh trực tiếp với công thức NumPy ở bản CPU. |
 | Cùng công thức IoU viết lại 2 lần (`iou_one_to_many` và trong kernel) thay vì dùng chung 1 hàm | Code chạy **bên trong** kernel CUDA (`@cuda.jit`) bị giới hạn tập lệnh (không gọi được hàm NumPy cấp cao, chỉ dùng scalar operations như `max`/`min` mà Numba biên dịch được sang GPU) nên không thể tái sử dụng trực tiếp hàm NumPy của CPU. |
+| V2 đổi box từ **AoS sang SoA** (`x1,y1,x2,y2` là 4 mảng riêng thay vì 1 mảng `(N,4)` gộp) | Thread liền kề trong cùng warp đọc ô nhớ liền kề nhau → gộp thành 1 giao dịch bộ nhớ (**coalesced access**) thay vì nhiều giao dịch rời rạc như layout gộp của V1 — xem [Glossary mục C](GLOSSARY.md#c-kỹ-thuật-tối-ưu-bộ-nhớ--song-song-hoá-v2v3). |
+| V2 nén suppression thành **bitmask 64-bit** thay vì tải cả ma trận IoU | Giảm dữ liệu tải Host↔Device từ O(n²) (ma trận float32 đầy) xuống O(n²/64) (bitmask) — 64 lần nhỏ hơn, không phải "loại bỏ hoàn toàn" như module docstring từng ghi nhầm (đã sửa, xem [mục 2.5](#25-gpu_v2py--giải-thích-từng-hàm-và-cuda-kernel)). |
+| V3 đổi hẳn thuật toán sang **Matrix NMS / soft suppression** thay vì tiếp tục tối ưu phần cứng | GPU V2 vẫn giữ bản chất Greedy NMS (suppression vẫn có 1 vòng lặp CPU nhẹ, xem [mục 2.5](#25-gpu_v2py--giải-thích-từng-hàm-và-cuda-kernel)) — chỉ đổi thuật toán (giảm điểm dần thay vì loại hẳn) mới bỏ được hoàn toàn phụ thuộc tuần tự, cho phép 100% song song trên GPU (Wang et al., 2020; xem [mục 2.6](#26-gpu_v3py--giải-thích-từng-hàm-và-cuda-kernel)). |
+| V3 dùng **1D grid (N block, 256 thread/block)** thay vì 2D N×N như V1/V2 | Không cần ma trận IoU N×N nào cả (mỗi block tự tính `iou_max`/decay cho đúng 1 box bằng vòng lặp grid-stride nội bộ) — vừa tránh giới hạn kích thước grid 2D (`gridDim.y` tối đa 65.535 block trên nhiều kiến trúc GPU), vừa tránh cấp phát bộ nhớ O(n²). |
+
+### 2.5 `gpu_v2.py` — giải thích từng hàm và CUDA kernel
+
+V2 tấn công đúng 2 điểm yếu của V1 đã nêu ở mục 2.4: (1) cách đọc bộ nhớ không liền mạch, (2) phải tải cả ma trận IoU N×N về CPU.
+
+#### `_iou_matrix_coalesced_kernel(x1, y1, x2, y2, iou_out)` — `@cuda.jit`, `gpu_v2.py:86-126`
+
+Gần như giống hệt `_iou_matrix_kernel` của V1 (cùng công thức IoU, cùng bounds guard), chỉ khác **cách nhận toạ độ box**: thay vì 1 mảng `boxes[N,4]` gộp (AoS — Array of Structures), V2 nhận 4 mảng riêng `x1[N], y1[N], x2[N], y2[N]` (SoA — Structure of Arrays, xem [Glossary mục C](GLOSSARY.md#c-kỹ-thuật-tối-ưu-bộ-nhớ--song-song-hoá-v2v3)). Lý do: với AoS, thread `i` đọc `boxes[i, 0]` cách thread `i+1` đọc `boxes[i+1, 0]` một khoảng 16 byte (4 số float32/box) — không liền mạch. Với SoA, thread `i` đọc `x1[i]` cách thread `i+1` đọc `x1[i+1]` đúng 4 byte liền kề — GPU gộp lại thành 1 giao dịch bộ nhớ 128-byte cho cả warp 32 thread thay vì nhiều giao dịch rời rạc (**coalesced memory access**).
+
+#### `_nms_bitmask_kernel(x1, y1, x2, y2, mask_out, n, iou_threshold)` — `@cuda.jit`, `gpu_v2.py:133-215`
+
+Đây là kernel quan trọng nhất của V2 — thay vì tải cả ma trận IoU N×N số thực (như V1), kernel này tính thẳng ra **bitmask suppression**: với mỗi box `i`, xác định nó suppress những box nào (trong số các box điểm thấp hơn) và nén kết quả đó thành các số nguyên 64-bit.
+
+- **Tổ chức grid**: 2D, `bx = blockIdx.x` là "khối 64 box" chứa box neo `i` (`i = bx*64 + tx`), `by = blockIdx.y` là "khối 64 box mục tiêu" đang xét. `if by < bx: return` bỏ qua sớm các khối chắc chắn không cần tính, vì box `i` chỉ có thể suppress box điểm thấp hơn nó (chỉ số lớn hơn, tức nằm ở khối `by >= bx`).
+- **Shared memory caching**: mỗi block nạp 64 box của khối cột `by` vào shared memory (`sx1, sy1, sx2, sy2`) một lần duy nhất, rồi mọi thread trong block cùng đọc lại từ đó — tránh đọc lại global memory 64 lần cho mỗi thread.
+- **Kết quả**: `mask_out[by, i]` là 1 số uint64, bit thứ `k` bật (`1`) nghĩa là "box `i` suppress box thứ `(by*64 + k)`".
+
+#### `run_gpu_v2(boxes, scores, iou_threshold=0.5)` — `gpu_v2.py:262-319`
+
+Pipeline 5 bước:
+1. Sắp xếp theo score (CPU, giống hệt V1).
+2. Chuyển box đã sắp xếp sang SoA rồi tải lên GPU (`_boxes_to_soa_device`).
+3. Cấp phát bitmask `(ceil(N/64), N)` uint64 trên GPU — **không cần zero-fill từ host** (xem bước 5, đây là điểm đã sửa: bản trước tạo mảng zero trên host rồi upload, tốn thêm 1 lượt truyền O(n²/64) không cần thiết).
+4. Chạy `_nms_bitmask_kernel`, tải bitmask về CPU (~12.5MB ở N=10.000, so với ~400MB của ma trận IoU đầy ở V1 — giảm 64 lần, không phải "loại bỏ hoàn toàn" PCIe cost).
+5. **Vòng lặp CPU cuối cùng** (vẫn tuần tự, đây là phần Greedy NMS chưa loại bỏ được): với mỗi box `i` theo thứ tự score giảm dần, kiểm tra đã bị suppress chưa (tra 1 bit trong `suppressed[block_idx]`); nếu chưa, giữ lại rồi OR bitmask của nó vào trạng thái `suppressed` — nhưng **chỉ OR từ hàng `block_idx` trở đi** (`suppressed[block_idx:] |= mask_cpu[block_idx:, i]`), vì kernel chỉ ghi các hàng `by >= bx`, hàng trước đó chưa từng được ghi và không bao giờ cần đọc.
+
+> **V2 có loại bỏ hoàn toàn vòng lặp CPU không? Không.** Bước 5 vẫn là `for i in range(n)` bằng Python — nhẹ hơn nhiều so với V1 (mỗi lần chỉ OR 2 mảng ngắn ~N/64 phần tử thay vì so sánh cả hàng N phần tử), nhưng vẫn là 1 vòng lặp tuần tự thật sự (quyết định về box `i` phụ thuộc mọi box điểm cao hơn đã xử lý trước đó). Đây chính là động lực cho V3 (mục 2.6) — đổi hẳn thuật toán để bỏ hoàn toàn vòng lặp này.
+
+### 2.6 `gpu_v3.py` — giải thích từng hàm và CUDA kernel
+
+V3 không tối ưu thêm cách làm của Greedy NMS — nó **đổi hẳn thuật toán** sang Matrix NMS (Wang et al., 2020), loại bỏ hoàn toàn vòng lặp CPU còn sót lại ở V2.
+
+#### `_iou_max_kernel(x1, y1, x2, y2, iou_max_out, n)` — `@cuda.jit(fastmath=True)`, `gpu_v3.py:60-113`
+
+Một block (256 thread) phụ trách đúng 1 box `i`, tính `iou_max_out[i]` = IoU lớn nhất giữa box `i` và **bất kỳ box nào điểm cao hơn nó** (chỉ số nhỏ hơn `i`, vì box đã sắp theo score giảm dần).
+
+- **Grid-stride loop**: với tối đa `i` box điểm cao hơn cần so sánh, 256 thread trong block chia nhau quét: thread `tx` xét các chỉ số `tx, tx+256, tx+512, ...` — giữ cả 256 thread bận việc bất kể `i` lớn hay nhỏ.
+- **Tree reduction (parallel reduction)**: sau khi mỗi thread có 1 giá trị max cục bộ, cần gộp 256 giá trị đó thành 1 giá trị max chung của cả block. Cách làm: ghi vào mảng shared memory `s_max[256]`, rồi lặp giảm dần `stride` (128 → 64 → ... → 1), mỗi bước so sánh cặp cách nhau `stride` và giữ giá trị lớn hơn, có `cuda.syncthreads()` giữa các bước để đảm bảo mọi thread thấy được kết quả bước trước trước khi đọc. Sau bước cuối, `s_max[0]` là max của cả block.
+
+#### `_decay_scores_kernel(x1, y1, x2, y2, scores, iou_max, n, method, sigma)` — `@cuda.jit(fastmath=True)`, `gpu_v3.py:117-192`
+
+Một block phụ trách đúng 1 box `j`, nhân `scores[j]` với hệ số suy giảm (**decay factor**) nhỏ nhất trong số các hệ số mà từng box điểm cao hơn `j` (chỉ số `i < j`) đóng góp — đây chính là bước "soft suppression": giảm điểm thay vì xoá hẳn.
+
+- Yêu cầu `_iou_max_kernel` đã chạy xong cho **mọi** box trước khi kernel này bắt đầu (`cuda.synchronize()` giữa 2 lần gọi kernel trong `run_gpu_v3_matrix_nms`) — đây là điểm đồng bộ bắt buộc duy nhất giữa 2 giai đoạn của thuật toán, nhưng ở quy mô toàn kernel chứ không phải bên trong 1 kernel.
+- **Mathematical pruning** (comment gốc trong code): theo công thức Matrix NMS, decay chỉ nhỏ hơn 1 khi `IoU(i, j) > iou_max[i]`. Code kiểm tra điều kiện rẻ này trước, chỉ tính `exp()`/phép chia (đắt) khi thật sự cần — bỏ qua phần lớn cặp không ảnh hưởng.
+- 2 công thức decay: `method="linear"` (giảm tuyến tính theo tỉ lệ IoU) hoặc `method="gaussian"` (giảm theo hàm mũ, tham số độ mượt `sigma`).
+- Cùng kiểu tree reduction như `_iou_max_kernel`, nhưng gộp về **min** thay vì max (decay cuối của box `j` là decay **nhỏ nhất/nghiêm khắc nhất** trong số mọi box điểm cao hơn nó — 1 chồng lấp mạnh là đủ để suppress).
+
+#### `run_gpu_v3_matrix_nms(boxes, scores, score_threshold=0.05, method="gaussian", sigma=2.0)` — `gpu_v3.py:169-205`
+
+Pipeline: sắp xếp theo score (CPU) → tải box + score lên GPU (SoA, giống V2) → chạy `_iou_max_kernel` → `cuda.synchronize()` → chạy `_decay_scores_kernel` → tải score đã giảm về CPU → **`np.where(final_scores > score_threshold)`** chọn box giữ lại.
+
+Khác biệt căn bản so với V1/V2: **không còn vòng lặp CPU nào cả**. Cả 2 kernel chạy song song hoàn toàn cho mọi box cùng lúc; quyết định "giữ hay loại" cuối cùng là so sánh ngưỡng điểm số (`score_threshold`), không phải duyệt tuần tự theo rank như Greedy NMS. Đây cũng là lý do **tập box V3 giữ lại không khớp y hệt CPU baseline/V1/V2** khi so theo index — V3 trả lời câu hỏi "điểm tin cậy còn lại sau khi trừ hao phần chồng lấp là bao nhiêu", không phải "giữ hay loại theo đúng thứ tự rank" — một đánh đổi thiết kế có chủ đích, không phải bug (xem `presentation/QA_PREP.md` mục F).
 
 ---
 
@@ -258,8 +327,19 @@ flowchart LR
 | | Truyền dữ liệu Host↔Device | O(n) lên (boxes), **O(n²) xuống** (ma trận IoU đầy đủ) | Xem mục 3.3 — đây là **bottleneck thực sự** ở N lớn. |
 | | Vòng lặp suppression trên host | O(n) lần lặp × tra bảng vector hoá O(n) mỗi lần (broadcast NumPy) = **O(n²)** tổng, nhưng chạy ở tốc độ C (vector hoá) thay vì tốc độ Python thông dịch từng phần tử | Không còn gọi lại `iou_one_to_many` — đây là khác biệt cốt lõi so với baseline. |
 | | **Tổng** | Tính toán O(n²/p) + truyền dữ liệu O(n²) + suppression O(n²) tốc độ C | Về mặt Big-O "hình thức", GPU V1 **không đổi bậc phức tạp** (vẫn O(n²)) — điểm cải thiện thực sự nằm ở **hằng số** (song song hoá phần tính toán nặng nhất, và thay Python loop bằng C-speed broadcast), không phải đổi từ O(n²) sang O(n log n). |
+| **GPU V2** (`run_gpu_v2`) | Sort | O(n log n) | CPU, giống baseline |
+| | Kernel IoU coalesced + bitmask | O(n²) công việc song song → O(n²/p) thời gian thực tế, hằng số nhỏ hơn V1 nhờ coalesced access | `_iou_matrix_coalesced_kernel` + `_nms_bitmask_kernel`, mục 2.5 |
+| | Truyền dữ liệu Host↔Device | O(n) lên, **O(n²/64) xuống** (bitmask, không phải O(n) như module docstring từng ghi nhầm) | Giảm 64 lần so với V1, không phải loại bỏ hoàn toàn |
+| | Vòng lặp OR-reduction trên host | **O(n²/64)** tổng (n lần lặp × O(n/64) mỗi lần) — vẫn tuần tự về bản chất | Nhẹ hơn V1 (O(n²)) nhưng **không phải O(n)** — đây vẫn là 1 vòng Python thật |
+| | **Tổng** | Vẫn O(n²) hình thức, nhưng hằng số nhỏ hơn V1 ở cả 3 khâu (tính toán, truyền dữ liệu, suppression) | Không đổi bậc phức tạp, giống V1 — chỉ V3 (dưới) mới đổi bản chất bài toán |
+| **GPU V3** (`run_gpu_v3_matrix_nms`) | Sort | O(n log n) | CPU, giống baseline |
+| | Kernel `_iou_max_kernel` | O(n²) công việc (mỗi box `i` quét tối đa `i` box) song song trên N block × 256 thread → O(n²/(N·256)) thời gian thực tế | mục 2.6 |
+| | Kernel `_decay_scores_kernel` | Tương tự, O(n²) công việc song song | mục 2.6 |
+| | Truyền dữ liệu Host↔Device | O(n) cả 2 chiều (chỉ box/score/iou_max theo box, không có ma trận N×N nào) | Không còn thành phần O(n²) nào trong truyền dữ liệu — khác biệt lớn nhất so với V1/V2 |
+| | Vòng lặp CPU | **Không có** — quyết định giữ/loại chỉ là `np.where(scores > threshold)`, O(n) vector hoá | Đây là điểm khác biệt cốt lõi: V3 loại bỏ hoàn toàn phần tuần tự, không chỉ làm nó rẻ hơn như V2 |
+| | **Tổng** | Vẫn O(n²) công việc tính toán (không giảm bậc), nhưng **không còn phần nào chạy tuần tự trên CPU** | V3 không đổi Big-O của phần tính toán so với V1/V2, nhưng đổi *cấu trúc* bài toán: loại bỏ hẳn chuỗi phụ thuộc tuần tự, không chỉ chia nhỏ công việc |
 
-> **Lưu ý quan trọng**: bảng trên là phân tích lý thuyết dựa trên cấu trúc code, không phải kết quả đo thực tế trong môi trường này (máy hiện tại không có GPU/CUDA — xem mục 3.3). Số liệu tốc độ thực tế (nếu cần) nên lấy từ chạy `python src/gpu_v1.py --benchmark` trên máy có GPU, hoặc trên notebook `gpu_v1.ipynb` (Colab/Kaggle GPU runtime).
+> **Lưu ý quan trọng**: các dòng liên quan tới V1/V2/V3 ở trên là phân tích lý thuyết dựa trên cấu trúc code. CPU baseline và GPU V1 đã có số đo thật trên Colab T4 (xem `presentation/README.md` mục "Trạng thái số liệu"); GPU V2/V3 **code đã xong nhưng benchmark tốc độ thật vẫn đang chờ chạy** — số liệu tốc độ cụ thể nên lấy từ chạy `python src/gpu_v2.py --benchmark` / `python src/gpu_v3.py --benchmark` trên máy có GPU, hoặc notebook tương ứng (Colab/Kaggle GPU runtime).
 
 ### 3.3 Ghi chú hiệu năng (performance bottlenecks) và lưu ý khi mở rộng
 
@@ -269,8 +349,8 @@ flowchart LR
 2. **Truyền dữ liệu Host↔Device (PCIe) trở thành bottleneck ở N lớn.**
    Bước `copy_to_host()` phải chuyển toàn bộ ma trận N×N từ VRAM GPU về RAM CPU qua bus PCIe — băng thông PCIe thấp hơn nhiều so với băng thông bộ nhớ GPU nội bộ. Vì kích thước dữ liệu truyền tăng O(n²) trong khi công việc tính toán trên GPU giảm theo O(n²/p) (càng nhiều thread thì càng nhanh), ở N đủ lớn, **thời gian chờ truyền dữ liệu có thể vượt qua thời gian tính toán thực tế** — một dạng bottleneck "memory-bound" kinh điển của lập trình GPU.
 
-3. **Vòng lặp suppression trên host (`run_gpu_v1`, dòng 154-162) vẫn là `for i in range(n)` bằng Python.**
-   Dù mỗi bước đã được vector hoá (không lặp Python bên trong), vòng lặp **ngoài** vẫn chạy tuần tự qua tối đa N hạng, mỗi lần gọi một phép slice NumPy riêng — với N rất lớn, overhead gọi hàm Python lặp lại N lần cũng đáng kể. Đây chính là phần mà **GPU V2** (kế hoạch: parallel reduction cho suppression mask) và **GPU V3** (kế hoạch: Matrix NMS, loại bỏ hoàn toàn phụ thuộc tuần tự bằng cơ chế "soft suppression"/decay factor theo Wang et al. 2020) nhắm tới giải quyết — hiện **chưa có code** cho hai phiên bản này trong repo.
+3. **Vòng lặp suppression trên host (`run_gpu_v1`) vẫn là `for i in range(n)` bằng Python.**
+   Dù mỗi bước đã được vector hoá (không lặp Python bên trong), vòng lặp **ngoài** vẫn chạy tuần tự qua tối đa N hạng, mỗi lần gọi một phép slice NumPy riêng — với N rất lớn, overhead gọi hàm Python lặp lại N lần cũng đáng kể. **GPU V2** (bitmask + parallel reduction, mục 2.5) làm vòng lặp này rẻ hơn nhiều (OR 2 mảng ngắn ~N/64 phần tử thay vì so cả hàng N phần tử) nhưng **không loại bỏ được nó** — vẫn còn 1 vòng Python tuần tự thật sự. **GPU V3** (Matrix NMS, mục 2.6) mới là bản loại bỏ hoàn toàn vòng lặp CPU, bằng cách đổi hẳn thuật toán (soft suppression/decay factor theo Wang et al. 2020) thay vì tối ưu thêm phần cứng.
 
 4. **Chi phí biên dịch JIT ở lần gọi đầu tiên.**
    Numba biên dịch kernel `@cuda.jit` **lần đầu tiên nó được gọi** với một signature (kiểu dữ liệu) cụ thể — không phải lúc import module. Cả `benchmark()` (dòng 182-184) và `main()` (dòng 229-230) trong `gpu_v1.py` đều chủ động "warm up" bằng một lần gọi nhỏ trước khi đo thời gian thật — **bất kỳ ai viết benchmark mới cho project này cần làm tương tự**, nếu không, lần đo đầu tiên sẽ bị lẫn thời gian compile, làm sai lệch kết quả (nhìn như GPU chậm hơn thực tế, đặc biệt rõ ở N nhỏ).
@@ -278,27 +358,57 @@ flowchart LR
 5. **`cuda.synchronize()` là điểm đồng bộ bắt buộc.**
    Lệnh phát kernel (`_iou_matrix_kernel[bpg, _TPB](...)`) không chặn (non-blocking) — CPU tiếp tục chạy code sau đó ngay lập tức trong khi GPU vẫn đang tính. Nếu thiếu `cuda.synchronize()` trước `copy_to_host()`, có nguy cơ đọc dữ liệu **chưa được ghi xong** (race condition). Đây là điểm dễ mắc lỗi nhất khi mở rộng thêm kernel mới cho V2/V3.
 
-6. **Không có xử lý batch (nhiều ảnh cùng lúc) trong V1 hiện tại.**
-   Proposal đặt mục tiêu benchmark với "batch size 32", nhưng cả `cpu_baseline.py` và `gpu_v1.py` hiện chỉ xử lý **một tập box duy nhất** mỗi lần gọi (không có chiều batch). Khi triển khai V2 (được proposal mô tả là "batched NMS"), cần bổ sung chiều batch vào cả kernel (ví dụ thêm `cuda.grid(3)` hoặc xử lý tuần tự từng ảnh trong batch) — đây là một thay đổi kiến trúc, không phải chỉ tối ưu nhỏ.
+6. **Chưa có xử lý batch (nhiều ảnh cùng lúc) ở bất kỳ version nào.**
+   Catalog đề tài A4 đặt mục tiêu benchmark với "batch size 32", nhưng cả 4 file trong `src/` hiện chỉ xử lý **một tập box duy nhất** mỗi lần gọi (không có chiều batch). Lưu ý: tên hàm/kernel "batched" trong `gpu_v2.py` (`_nms_bitmask_kernel`, tiêu đề module "Batched NMS & Hardware Optimization") nói về việc **gom 64 box/khối để nén bitmask** — một khái niệm "batch" hoàn toàn khác, không phải batch size 32 của catalog. Bổ sung chiều batch thật (ví dụ thêm 1 chiều `cuda.grid(3)` hoặc xử lý tuần tự từng ảnh trong batch) vẫn là một thay đổi kiến trúc còn thiếu, không phải chỉ tối ưu nhỏ.
+
+7. **V2's bitmask buffer từng bị zero-fill từ host một cách không cần thiết (đã sửa).**
+   `run_gpu_v2` từng tạo mảng `(M, n)` uint64 toàn số 0 trên host rồi upload lên GPU trước khi chạy kernel, để tránh đọc phải bộ nhớ chưa khởi tạo. Nhưng vòng lặp OR-reduction ở host (bước 5, mục 2.5) trên thực tế **chỉ đọc các hàng mà kernel có ghi** (`by >= bx`) — các hàng còn lại không bao giờ được đọc, nên không cần zero-fill từ đầu. Việc zero-fill đó vô tình tạo thêm 1 lượt truyền O(n²/64) qua PCIe — cùng bậc với chính phần download sau đó — mâu thuẫn với chính mục tiêu thiết kế của V2 ("giảm PCIe traffic"). Đã sửa bằng cách bỏ hẳn bước zero-fill và thu hẹp vòng OR-reduction chỉ đọc từ hàng `block_idx` trở đi.
+
+8. **`fastmath=True` ở V3 đánh đổi độ chính xác lấy tốc độ.**
+   `_iou_max_kernel`/`_decay_scores_kernel` bật cờ này, cho phép trình biên dịch dùng phép toán gần đúng/nhanh hơn — có thể cho kết quả hơi khác biệt (vài ULP) giữa các lần chạy hoặc giữa các kiến trúc GPU khác nhau. Chấp nhận được vì dự án đã dùng dung sai `1e-4` khi so khớp IoU, và V3 vốn đã dùng tiêu chí ngưỡng điểm số (không so khớp index tuyệt đối như V1/V2).
+
+9. **V3 dùng grid 1D (N block) thay vì 2D (N×N block như V1/V2) — vừa tránh giới hạn kích thước grid, vừa không cần ma trận N×N.**
+   Grid 2D của V1/V2 bị giới hạn bởi `gridDim.y` tối đa 65.535 block trên nhiều kiến trúc GPU — với block 16×16, giới hạn đó tương ứng N ≈ 1.048.560 box (chưa chạm tới ở N=10.000 hiện tại, nhưng là giới hạn cứng nếu mở rộng benchmark lên N rất lớn). Thiết kế 1D của V3 (N block, mỗi block tự quét grid-stride nội bộ) không có giới hạn này, đồng thời không cần cấp phát ma trận IoU N×N nào cả.
 
 ### 3.4 Bảng thuật ngữ (Glossary)
 
-| Thuật ngữ | Giải thích |
-|---|---|
-| **NMS (Non-Maximum Suppression)** | Thuật toán hậu xử lý loại bỏ các box dự đoán trùng lặp, chỉ giữ lại box có độ tin cậy cao nhất tại mỗi vị trí. |
-| **IoU (Intersection over Union)** | Tỉ lệ diện tích vùng giao nhau trên diện tích vùng hợp của hai box; đo mức độ hai box "chồng lấp" nhau, giá trị từ 0 (không chạm) đến 1 (trùng khít). |
-| **Greedy algorithm (thuật toán tham lam)** | Chiến lược ra quyết định "tốt nhất tại từng bước", không xét lại — ở đây là luôn giữ box điểm cao nhất còn lại rồi loại các box chồng lấp nó. |
-| **CUDA** | Nền tảng lập trình song song của NVIDIA cho phép chạy code trực tiếp trên GPU. |
-| **Kernel** | Hàm được viết để chạy song song trên GPU, được hàng nghìn thread cùng thực thi (mỗi thread một bản sao, xử lý dữ liệu khác nhau). Trong repo: `_iou_matrix_kernel`. |
-| **Thread** | Đơn vị thực thi nhỏ nhất trên GPU — mỗi thread trong `_iou_matrix_kernel` phụ trách tính IoU cho đúng một cặp `(i, j)`. |
-| **Block** | Một nhóm thread (ở đây 16×16 = 256 thread/block, hằng số `_TPB`). Các thread trong cùng block có thể chia sẻ tài nguyên/đồng bộ hoá với nhau (dù kernel này không cần, vì các phép tính độc lập). |
-| **Grid** | Tập hợp tất cả các block cần để phủ hết dữ liệu — ở đây là `ceil(N/16) × ceil(N/16)` block để phủ ma trận N×N. |
-| **Host / Device** | "Host" = CPU và RAM hệ thống; "Device" = GPU và bộ nhớ VRAM của nó. Dữ liệu phải được copy tường minh giữa hai bên (`cuda.to_device`, `copy_to_host`). |
-| **JIT (Just-In-Time compilation)** | Biên dịch code thành mã máy **ngay khi cần dùng lần đầu** (thay vì biên dịch trước toàn bộ) — Numba dùng cơ chế này cho `@cuda.jit`, nên lần gọi đầu tiên luôn chậm hơn do có thêm bước biên dịch. |
-| **Embarrassingly parallel** | Loại bài toán mà các đơn vị công việc hoàn toàn độc lập, không cần giao tiếp/đồng bộ giữa chúng — dễ song song hoá nhất có thể. Tính ma trận IoU thuộc loại này. |
-| **Vectorization (vector hoá)** | Kỹ thuật thay vòng lặp Python từng phần tử bằng một phép toán trên toàn bộ mảng cùng lúc (NumPy), chạy ở tốc độ mã C thay vì tốc độ thông dịch Python. |
-| **Stable sort (sắp xếp ổn định)** | Thuật toán sắp xếp giữ nguyên thứ tự tương đối của các phần tử có giá trị bằng nhau — đảm bảo `run_cpu`/`run_gpu_v1` cho kết quả tất định khi có nhiều box cùng score. |
-| **Bounds guard** | Câu lệnh kiểm tra chỉ số nằm trong giới hạn hợp lệ trước khi truy cập mảng — bắt buộc trong kernel CUDA vì số thread cấp phát (grid) luôn được làm tròn lên, có thể dư ra ngoài kích thước dữ liệu thật. |
-| **PCIe (bus truyền dữ liệu Host↔Device)** | Đường truyền vật lý giữa CPU/RAM và GPU/VRAM; băng thông của nó thường là điểm nghẽn khi cần chuyển lượng dữ liệu lớn (như ma trận IoU N×N) qua lại. |
-| **Matrix NMS** (kế hoạch — GPU V3, chưa có code) | Biến thể NMS thay cơ chế loại bỏ cứng (hard suppression) bằng "làm mờ dần" điểm số (soft suppression/decay factor) theo ma trận, cho phép tính toán song song hoàn toàn, không còn phụ thuộc tuần tự (Wang et al., 2020). |
-| **Soft-NMS** | Một hướng tiếp cận khác (Bodla et al., 2017) được liệt kê trong tài liệu tham khảo của proposal, cũng nhằm thay việc loại bỏ cứng bằng giảm điểm số dần dần thay vì xoá hẳn. |
+Xem **[docs/GLOSSARY.md](GLOSSARY.md)** — đã tách thành file riêng để dễ tra cứu và liên kết từ nhiều tài liệu khác (kể cả `presentation/*.md`), thay vì lặp lại/nhân bản định nghĩa ở nhiều nơi.
+
+### 3.5 Sơ đồ luồng dữ liệu — GPU V2
+
+```mermaid
+flowchart TD
+    A["Input: boxes (N,4), scores (N,)"] --> B["np.argsort(-scores, stable) — CPU"]
+    B --> C["_boxes_to_soa_device()<br/>AoS -> SoA, Host -> Device"]
+    C --> D["_iou_matrix_coalesced_kernel<br/>N x N thread, coalesced reads"]
+    D --> E["_nms_bitmask_kernel<br/>grid (M,M) blocks, 64 thread/block<br/>shared-mem cached target block"]
+    E --> F["mask_out (M,N) uint64 trên Device<br/>M = ceil(N/64)"]
+    F --> G["copy_to_host()<br/>Device -> Host, ~N²/64 (không phải N² như V1)"]
+    G --> H{"Còn rank i chưa xét?"}
+    H -->|có| I["is_suppressed? tra 1 bit trong suppressed[block_idx]"]
+    I -->|đã suppress| H
+    I -->|chưa, giữ lại| J["suppressed[block_idx:] |= mask_cpu[block_idx:, i]<br/>vòng lặp CPU vẫn còn, chỉ nhẹ hơn V1"]
+    J --> H
+    H -->|hết| K["keep_ranks[] -> map về order gốc"]
+    K --> L["Output: keep"]
+```
+
+So với [Sơ đồ 1 ở mục 3.1](#31-sơ-đồ-luồng-dữ-liệu) (V1): khác ở 2 chỗ — SoA thay AoS trước khi lên GPU, và tải về **bitmask nén** thay vì ma trận IoU đầy. Vòng lặp CPU cuối (`H`→`I`→`J`) vẫn tồn tại y hệt về bản chất tuần tự, chỉ rẻ hơn.
+
+### 3.6 Sơ đồ luồng dữ liệu — GPU V3
+
+```mermaid
+flowchart TD
+    A["Input: boxes (N,4), scores (N,)"] --> B["np.argsort(-scores, stable) — CPU"]
+    B --> C["SoA box + score -> Device"]
+    C --> D["_iou_max_kernel<br/>N block x 256 thread<br/>grid-stride loop + tree reduction (max)"]
+    D --> E["iou_max (N,) trên Device"]
+    E --> F["cuda.synchronize()<br/>điểm đồng bộ bắt buộc giữa 2 kernel"]
+    F --> G["_decay_scores_kernel<br/>N block x 256 thread<br/>grid-stride loop + tree reduction (min)<br/>mathematical pruning"]
+    G --> H["scores đã decay (N,) trên Device"]
+    H --> I["copy_to_host()<br/>chỉ O(N), không có ma trận N×N nào"]
+    I --> J["np.where(scores > score_threshold)<br/>KHÔNG có vòng lặp CPU nào"]
+    J --> K["Output: keep (không nhất thiết khớp thứ tự rank như V1/V2)"]
+```
+
+Khác biệt căn bản so với [Sơ đồ 1](#31-sơ-đồ-luồng-dữ-liệu) (V1) và [Sơ đồ V2](#35-sơ-đồ-luồng-dữ-liệu--gpu-v2) ở trên: hoàn toàn **không có bước nào chạy tuần tự trên CPU** sau khi dữ liệu đã lên GPU — bước cuối chỉ là so ngưỡng vector hoá, không phải vòng lặp theo rank.
