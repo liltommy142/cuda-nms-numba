@@ -80,41 +80,14 @@ nhất. V3 chỉ là trade-off Matrix NMS, không ghi “V3 match torchvision”
 
 ## 4. Benchmark V2 batch-size 32
 
-CLI V2 hiện có đường batch riêng. Warm-up xảy ra trong process, nên chạy nhiều
-lần trong **cùng một notebook cell** nếu muốn thống kê. Cell sau lưu raw sample
-đơn vị giây và latency trung bình trên một ảnh:
+Chạy lệnh **Bash** sau trong terminal hoặc trong Colab với tiền tố `!`. Script
+tự warm-up, lặp, lưu raw samples và metadata GPU vào JSON:
 
-```python
-import json, statistics, time
-import numpy as np
-from cpu_baseline import load_data
-from gpu_v2 import run_gpu_v2
-
-B, N, REPEATS = 32, 10_000, 7
-samples = [load_data(N, seed=i) for i in range(B)]
-boxes = np.stack([x[0] for x in samples])
-scores = np.stack([x[1] for x in samples])
-
-run_gpu_v2(boxes[:, :64], scores[:, :64])  # JIT warm-up
-run_gpu_v2(boxes, scores)                  # allocation/cache warm-up
-
-times = []
-for _ in range(REPEATS):
-    t0 = time.perf_counter()
-    run_gpu_v2(boxes, scores)
-    times.append(time.perf_counter() - t0)
-
-report = {
-    "batch_size": B,
-    "boxes_per_image": N,
-    "samples_seconds": times,
-    "median_batch_seconds": statistics.median(times),
-    "stddev_batch_seconds": statistics.stdev(times),
-    "median_per_image_seconds": statistics.median(times) / B,
-}
-print(json.dumps(report, indent=2))
-with open("presentation/seminar_2/evidence/batch32_t4.json", "w") as f:
-    json.dump(report, f, indent=2)
+```bash
+python benchmarks/run_v2_batch.py --batch-size 32 --n 10000 \
+  --warmup 2 --repeats 7 \
+  --json presentation/seminar_2/evidence/batch32_t4.json \
+  | tee presentation/seminar_2/evidence/batch32_t4.txt
 ```
 
 Con số này là **end-to-end V2 latency**: sort host, transfer, kernel, copy
