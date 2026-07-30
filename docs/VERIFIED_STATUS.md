@@ -45,6 +45,20 @@ python benchmarks/run_all.py --versions cpu v1 v2 v3 --repeats 7 --warmup 2
 V1/V2/V3 không chạy ở lần này vì không có CUDA. Không được suy ra speedup GPU
 từ bảng trên.
 
+## Kết quả CUDA T4 đã lưu
+
+Evidence nằm trong `presentation/seminar_2/evidence/`:
+
+- `pytest_t4_final.txt`: **50 passed, 16 warnings**;
+- `benchmark_t4_single.json`: median N=10,000: CPU 1125.272 ms, V1 226.107
+  ms, V2 31.599 ms, V3 4.092 ms;
+- `batch32_t4.json`: V2 batch 32 × 10,000 median **1.002 s/batch**
+  (31.320 ms/image), Tesla T4, compute capability 7.5.
+
+Các warning là `NumbaPerformanceWarning` về occupancy ở grid nhỏ trong test,
+không phải lỗi correctness. V2 batch pass test CPU match ở B=3 và B=32 với
+N=50 (partial 64-thread block), nhưng latency trên không đạt `<5 ms/batch`.
+
 ## Phạm vi hiện có
 
 - `run_cpu`, GPU V1 và GPU V2 là hard/greedy NMS; V1/V2 được thiết kế để trả về
@@ -52,9 +66,9 @@ từ bảng trên.
 - GPU V3 là Matrix NMS (soft suppression), không được kỳ vọng có cùng output
   với greedy NMS. `matrix_nms_reference()` là CPU oracle để kiểm tra quy ước
   Matrix NMS mà implementation hiện dùng.
-- Mọi implementation hiện xử lý một tập box mỗi lần gọi. Fused CUDA batch
-  kernel chưa được cài đặt, vì vậy chưa đáp ứng mục tiêu catalog A4 về độ trễ
-  batch-size 32.
+- V2 có fused CUDA mask-kernel theo chiều batch và CPU greedy resolver cho mỗi
+  ảnh; V1/V3 vẫn single-image. V2 chưa đáp ứng mục tiêu catalog A4 về latency
+  batch-size 32 (1.002 s/batch trên T4, thay vì `<5 ms`).
 
 ## Điều kiện để thay trạng thái thành “GPU verified”
 

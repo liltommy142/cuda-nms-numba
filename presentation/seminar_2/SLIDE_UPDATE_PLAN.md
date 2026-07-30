@@ -1,7 +1,7 @@
 # Việc cần làm với slide Seminar 2
 
-Deck hiện tại có thể giữ phần giải thích bài toán và kiến trúc, nhưng chưa được
-coi là deck final vì V2/V3 chưa có evidence CUDA.
+Deck hiện tại có thể giữ phần giải thích bài toán và kiến trúc. Evidence CUDA
+đã có, nên bước còn lại là đưa các số liệu dưới đây vào deck final.
 
 ## Giữ
 
@@ -23,17 +23,23 @@ coi là deck final vì V2/V3 chưa có evidence CUDA.
 5. Thêm slide cuối **Reproducibility & contribution**: commit, command test,
    command benchmark, phân công hai thành viên.
 
+## Số liệu phải dùng
+
+- Tesla T4; Python 3.12.13; NumPy 2.0.2; Numba 0.60.0.
+- Full CUDA correctness suite: **50 passed**.
+- N=10,000 single-image median: CPU 1125.272 ms; V1 226.107 ms; V2 31.599
+  ms; V3 4.092 ms.
+- V2 batch 32 × 10,000: **1002.239 ms/batch**, 31.320 ms/image, stddev
+  214.264 ms; target `<5 ms/batch` is not met.
+
 ## Không được nói trên slide
 
-- “V2/V3 đã nhanh X lần” khi chưa có JSON/log CUDA.
 - “V3 đúng như torchvision NMS”.
 - “V2 fully on-device greedy NMS”.
 - Trộn số CPU proposal, Colab lịch sử và benchmark mới trong một biểu đồ.
 
-## Sau khi có evidence
+## Việc còn lại
 
-1. Cập nhật `OUTLINE_AND_CONTENT.md` và `SCRIPT.md` trước.
-2. Cập nhật deck theo hai file đó, giữ font/layout đã có.
+1. Cập nhật deck theo `OUTLINE_AND_CONTENT.md` và `SCRIPT.md`, giữ font/layout đã có.
 3. Render, kiểm tra không tràn chữ và rehearsal theo `SCRIPT.md`.
-4. Lưu PPTX/PDF final cạnh artifact evidence; chỉ khi đó mới thay nhãn
-   “pending” bằng kết quả đo.
+4. Lưu PPTX/PDF final cạnh artifact evidence.

@@ -4,7 +4,7 @@
 >
 > Mỗi slide chỉ giữ bullet ngắn + gợi ý hình minh hoạ — chi tiết kỹ thuật đầy đủ nằm ở `SCRIPT.md` (lời nói) và `QA_PREP.md` (hỏi-đáp). Lý do tách như vậy: xem mục "Nhóm 5 — Transformer Attention" trong `CROSS_GROUP_LESSONS.md` (2 lần bị chê "quá chi tiết cho 1 buổi proposal").
 >
-> Chỗ nào ghi `[CHỜ COLAB]` nghĩa là số liệu chưa có thật — **phải điền số thật trước khi thuyết trình**, xem `README.md` mục "Trạng thái số liệu".
+> Số liệu T4 đã được xác minh; dùng `README.md` và `evidence/` làm nguồn duy nhất khi cập nhật deck.
 
 ---
 
@@ -134,15 +134,15 @@ Nút thắt cổ chai của V1:
 
 2 cải tiến so với V1:
 1. **Coalesced Memory Access**: 4 mảng `x1,y1,x2,y2` riêng (SoA) thay vì 1 mảng box gộp (AoS) → tối ưu hoá cách đọc toạ độ hộp để các luồng liên tiếp truy cập bộ nhớ liền kề, tiết kiệm tối đa băng thông VRAM.
-2. **Batched NMS & Parallel Reduction**: gom cụm các hộp thành khối 64 (do dùng số nguyên 64-bit) và áp dụng kỹ thuật rút gọn song song (parallel reduction) cùng phép toán logic cấp bit để dựng **bitmask suppression** trực tiếp trên GPU — giảm PCIe traffic ~64 lần so với V1.
+2. **Batched NMS & Bitmask Packing**: gom các target box thành word 64-bit. Mỗi thread xử lý một anchor, tính song song quan hệ IoU với 64 target trong word đó rồi tự bật các bit suppression tương ứng. Kết quả là **bitmask suppression** trực tiếp trên GPU — giảm PCIe traffic xấp xỉ 64 lần so với V1.
 
-> ⚠️ **Lưu ý phân biệt chữ "Batched" ở đây**: word bitmask 64 box và batch size 32 là hai khái niệm khác nhau. V2 hiện đã có API/kernel batch theo chiều ảnh (`grid.z` chọn ảnh), nhưng chưa có evidence CUDA cho correctness hay latency batch-32; V1/V3 vẫn single-image. Cần nói rõ ranh giới này nếu bị hỏi.
+> ⚠️ **Lưu ý phân biệt chữ "Batched" ở đây**: word bitmask 64 box và batch size 32 là hai khái niệm khác nhau. V2 có API/kernel batch theo chiều ảnh (`grid.z` chọn ảnh), đã pass CUDA test B=32 và đo 1.002 s/batch; V1/V3 vẫn single-image.
 
 Vòng lặp CPU cuối vẫn còn (1 lần/rank), nhưng mỗi lần chỉ OR 2 mảng ngắn (N/64 phần tử) thay vì so sánh cả một hàng dài như V1.
 
-**Tốc độ (N=10.000)**: `[CHỜ COLAB]`× so với CPU — kỳ vọng ≥15× (mốc 100%, xem docstring `gpu_v2.py`)
+**Tốc độ (N=10.000)**: **35.6×** CPU cho single-image (31.599 ms vs 1125.272 ms). Batch 32 đúng về chức năng nhưng 1.002 s/batch, chưa đạt `<5 ms`.
 
-[Visual: sơ đồ "GPU V2: Batched NMS & Hardware Optimization" 2 nhánh Coalesced Memory Access / Batched NMS & Parallel Reduction, đã có trong pptx]
+[Visual: sơ đồ "GPU V2: Batched NMS & Hardware Optimization" 2 nhánh Coalesced Memory Access / Batched NMS & Bitmask Packing. Nếu deck cũ ghi “Parallel Reduction”, phải đổi nhãn này trước khi nộp.]
 
 ---
 
@@ -151,7 +151,7 @@ Vòng lặp CPU cuối vẫn còn (1 lần/rank), nhưng mỗi lần chỉ OR 2 
 *(Nội dung mới từ pptx — chưa có trong bản outline cũ, quan trọng: nói rõ V2 vẫn CHƯA giải quyết xong bài toán, chuẩn bị lý do cho V3)*
 
 1. **Vẫn mang bản chất Greedy NMS**: dù đã gom cụm (batches) và tối ưu phần cứng, GPU V2 vẫn phải giải quyết chuỗi phụ thuộc dữ liệu tuần tự (quyết định giữ/xoá hộp B vẫn phụ thuộc vào việc hộp điểm cao hơn đã bị xoá hay chưa).
-2. **Chưa song song hoá triệt để**: việc dựng mặt nạ triệt tiêu (suppression mask) bằng parallel reduction chỉ **giảm thiểu độ trễ**, chứ **chưa triệt tiêu được** tư duy so sánh tuần tự của thuật toán gốc.
+2. **Chưa song song hoá triệt để**: GPU đã dựng quan hệ suppression song song và nén bitmask, nhưng bước quyết định greedy vẫn tuần tự trên CPU. Vì vậy tối ưu này chỉ giảm lượng dữ liệu và chi phí mỗi bước, không triệt tiêu được phụ thuộc thuật toán gốc.
 
 → Đây là lý do V3 phải **đổi hẳn thuật toán** (soft suppression) thay vì tiếp tục tối ưu phần cứng như V1→V2.
 
@@ -174,7 +174,7 @@ Giải pháp này chuyển đổi việc triệt tiêu cứng tuần tự thành
 1. Mỗi box tính `iou_max` với các box điểm cao hơn nó — song song cho **mọi box cùng lúc**.
 2. Mỗi box tự tính hệ số suy giảm điểm số dựa trên `iou_max` đã có — cũng song song cho **mọi box cùng lúc**.
 
-**Tốc độ (N=10.000)**: `[CHỜ COLAB]`× so với CPU — kỳ vọng 30-80× (mốc 125%, xem docstring `gpu_v3.py`)
+**Tốc độ (N=10.000)**: **4.092 ms** single-image trên T4. Đây là Matrix NMS soft-suppression, không dùng để claim cùng output với greedy NMS.
 
 [Visual: sơ đồ 2 kernel nối tiếp + sơ đồ "Ưu điểm vượt trội của Matrix NMS" 3 nhánh, đã có trong pptx]
 
@@ -217,28 +217,29 @@ Thanks for your listening
 
 > pptx 15-slide hiện tại **chưa có slide riêng** cho: kết quả đo thật (bảng số CPU vs GPU V1), trạng thái từng version (checklist ✅/⏳), bảng mục tiêu 75/100/125% dạng chi tiết (chỉ có bản rút gọn ở Slide 6 "Roadmap"), và phân công công việc. Giữ nguyên các mục này ở đây — **2 bạn cần thống nhất có thêm slide cho phần này vào pptx hay không** trước khi thuyết trình, vì đây là nội dung quan trọng (số liệu thật + trạng thái trung thực + phân công) mà catalog đề tài thường yêu cầu.
 
-### Kết quả đo thật
+### Kết quả đo thật — Tesla T4, median của 7 lần chạy
 
-| N | CPU (s) | GPU V1 (s) | Speedup V1 |
-|---|---|---|---|
-| 100 | 0.0069 | 0.0057 | **1.2×** |
-| 1.000 | 0.1513 | 0.0146 | **10.3×** |
-| 10.000 | 2.4918 | 0.2557 | **9.7×** |
+| N | CPU | V1 | V2 | V3* |
+|---:|---:|---:|---:|---:|
+| 100 | 2.389 ms | 0.777 ms | 2.309 ms | 1.395 ms |
+| 1.000 | 38.777 ms | 7.454 ms | 3.729 ms | 1.376 ms |
+| 10.000 | 1125.272 ms | 226.107 ms | 31.599 ms | 4.092 ms |
 
-(CPU và GPU đo cùng 1 lần chạy trên Colab T4, xem `src/gpu_v1.ipynb` — đảm bảo so sánh công bằng, cùng điều kiện máy. **Khác với bảng "đo trong proposal" ở Slide 4** — xem ghi chú ở đó.)
+Ở N=10.000: V1 **5.0×**, V2 **35.6×** CPU. V3 nhanh hơn nhưng là Matrix
+NMS soft-suppression nên chỉ so tốc độ như một trade-off, không claim output
+giống greedy NMS. Full test: **50 passed**. Nguồn:
+`evidence/benchmark_t4_single.json` và `evidence/pytest_t4_final.txt`.
 
-Đã đối chiếu 100% với `torchvision.ops.nms` (ground truth bên ngoài).
-GPU V2 / V3: code xong, **đang chờ đo thật trên Colab T4** — `[CHỜ COLAB]`
-
-[Visual: bar chart CPU vs GPU V1, 3 nhóm N=100/1.000/10.000 — nếu có số V2/V3 thật, thêm 2 cột mỗi nhóm]
+[Visual: grouped bar chart latency (log scale), footnote “*V3 = Matrix NMS”]
 
 ### Đang ở đâu (trung thực)
 
 ✅ CPU baseline — đúng, đã test tự động
 ✅ GPU V1 — đúng, đã đo tốc độ thật
-✅ GPU V2 — code xong, test tự động đã viết, **đang chờ verify + benchmark thật trên Colab**
-✅ GPU V3 — code xong (Matrix NMS), **đang chờ verify + benchmark thật trên Colab**
-⏳ Batch size 32 (theo target catalog A4) — **V2 đã implement nhưng chưa verify CUDA**; V1/V3 vẫn xử lý một tập box. Không nhầm batch ảnh với word bitmask 64 box ở Slide 10.
+✅ GPU V2 — correctness + benchmark T4 đã verify
+✅ GPU V3 — correctness với Matrix-NMS oracle + benchmark T4 đã verify
+⚠️ Batch size 32 — V2 đúng về chức năng, nhưng **1.002 s/batch** tại
+32 × 10.000 box, không đạt target `<5 ms`; V1/V3 vẫn single-image.
 
 [Visual: checklist 5 dòng, dấu ✅/⏳ như trên]
 
@@ -247,8 +248,8 @@ GPU V2 / V3: code xong, **đang chờ đo thật trên Colab T4** — `[CHỜ CO
 | Mốc | Điều kiện | Trạng thái |
 |---|---|---|
 | 75% | GPU V1 đúng + benchmark | ✅ Đạt |
-| 100% | + GPU V2, ≥15× tại N=10.000 | ⏳ Code xong, chờ đo |
-| 125% (stretch) | + GPU V3, 30-80×, <5ms | ⏳ Code xong, chờ đo |
+| 100% | + GPU V2, ≥15× tại N=10.000 | ✅ Đạt 35.6×, single-image |
+| 125% (stretch) | + GPU V3, 30-80×, <5ms | ⚠️ V3 4.092 ms single-image; chưa có batch-32 V3 |
 
 [Visual: bậc thang 3 tầng 75/100/125%, đánh dấu tầng nào đã/đang/chưa đạt]
 

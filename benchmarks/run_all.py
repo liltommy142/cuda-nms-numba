@@ -5,8 +5,9 @@ Examples
 python benchmarks/run_all.py --versions cpu
 python benchmarks/run_all.py --versions cpu v1 v2 v3 --repeats 7 --json benchmarks/results/t4.json
 
-Each invocation measures a single set of boxes. The CUDA implementations do
-not currently support a fused batch dimension.
+Each invocation measures a single image / one set of boxes.  V2 also has a
+separate batch-size benchmark in ``benchmarks/run_v2_batch.py``; V1 and V3
+remain single-image implementations.
 """
 
 from __future__ import annotations

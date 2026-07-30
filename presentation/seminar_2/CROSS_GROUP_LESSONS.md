@@ -18,7 +18,7 @@
 ## Bài học tổng hợp áp dụng vào cấu trúc bài nói
 
 1. **Hiểu sâu, không học thuộc.** Câu trả lời hay nhất trong toàn bộ feedback (Nhóm 5, câu hỏi Q&A B13) không phải trả lời đúng công thức, mà giải thích được *lý do thiết kế* ("tại sao 1 thread chỉ tính 1 phần tử output" → giải thích cả về bản chất GPU lẫn vì sao tăng khối lượng/thread sẽ làm chậm đi). Nhóm mình cần trả lời kiểu đó cho câu tương tự: "vì sao 1 thread tính đúng 1 cặp IoU (i,j)" — đã có sẵn trong `QA_PREP.md`.
-2. **Trung thực về phần chưa làm/chưa đo tốt hơn là né tránh.** Không nhóm nào trong feedback bị chê vì nói "phần này em chưa đo/chưa làm" — chỉ bị chê khi tỏ ra không hiểu hoặc trả lời sai. Nhóm mình sẽ nói rõ V2/V3 **cần benchmark CUDA**, V2 có batch-size-32 ở code nhưng chưa có evidence GPU, còn V1/V3 vẫn single-image.
+2. **Trung thực về giới hạn quan trọng hơn né tránh.** Không nhóm nào trong feedback bị chê vì nói phần chưa đạt — chỉ bị chê khi tỏ ra không hiểu hoặc trả lời sai. Nhóm mình phải nói rõ V2 batch-32 đã có CUDA evidence nhưng chỉ đạt 1.002 s/batch, chưa đạt `<5 ms`; V1/V3 vẫn single-image.
 3. **1 slide kiến trúc / 1 version, không gộp chung.** Đây là khác biệt lớn nhất so với slide cũ (bản cũ gộp V1/V2/V3 vào 1 slide roadmap duy nhất, chỉ có số speedup). Giờ có code thật cho cả 3 version nên có thể (và nên) tách riêng, dùng đúng bài học của Nhóm 8.
 4. **Chuẩn bị câu hỏi "trade-off"** — mọi nhóm có sản phẩm nhiều version đều bị hỏi kiểu này (tốc độ đổi lấy gì). Với NMS: V1→V2 đổi bộ nhớ/độ phức tạp code lấy tốc độ (không đổi độ chính xác — vẫn hard NMS, khớp 100% CPU). V2→V3 đổi **cả thuật toán** (hard→soft suppression) — tốc độ tăng nhưng tập box giữ lại không còn giống hệt CPU baseline nữa, đây là trade-off thật cần nói chủ động, đừng đợi bị hỏi.
 

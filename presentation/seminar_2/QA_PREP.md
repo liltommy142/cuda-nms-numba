@@ -62,7 +62,7 @@ Lệnh phát kernel không chặn (non-blocking) — CPU chạy tiếp ngay. Kh�
 
 ---
 
-## D. Thiết kế GPU V2 (coalesced SoA + bitmask parallel reduction)
+## D. Thiết kế GPU V2 (coalesced SoA + bitmask packing)
 
 **Q: V2 khác V1 ở đâu, cụ thể?**
 2 điểm: (1) đổi layout box từ AoS (mảng gộp 4 toạ độ/box) sang **SoA** — 4 mảng riêng `x1,y1,x2,y2` — giúp các thread liền kề trong 1 warp đọc đúng ô nhớ liền kề (coalesced access), gom thành 1 giao dịch bộ nhớ thay vì nhiều giao dịch rời rạc. (2) Suppression: GPU tự tính và nén sẵn "ai suppress ai" thành **bitmask uint64** (`_nms_bitmask_kernel`) — chỉ cần tải về ~N²/64 phần tử thay vì cả ma trận N² số thực như V1.
@@ -76,11 +76,11 @@ Kernel `_nms_bitmask_kernel` chia N box thành các khối 64 (do dùng số ngu
 **Q: V2 có loại bỏ hoàn toàn vòng lặp tuần tự trên CPU không?**
 **Không hoàn toàn** — đây là điểm cần trả lời trung thực nếu bị hỏi sâu. Việc **tính ra** bitmask (ai-suppress-ai) đã 100% song song trên GPU. Nhưng bước cuối — quyết định thứ hạng nào thực sự được giữ theo đúng thứ tự điểm số — vẫn là 1 vòng `for i in range(n)` chạy trên CPU (`run_gpu_v2`), vì đây vẫn là chuỗi phụ thuộc tuần tự thật (không thể biết box thứ i có bị giữ hay không mà không biết trạng thái các box điểm cao hơn nó trước đó). Khác biệt so với V1: mỗi vòng lặp giờ chỉ OR 2 mảng ngắn (~N/64 phần tử, kiểu uint64) thay vì so sánh 1 hàng dài N phần tử số thực như V1 — nhẹ hơn nhiều, không phải nhanh hơn về mặt Big-O của vòng lặp ngoài (vẫn N lần lặp Python).
 
-**Q: Parallel reduction ở đây là gì?**
-Chỗ dùng đúng nghĩa "reduction": các bit suppress được TÍNH song song trên toàn bộ N² cặp cùng lúc rồi "gộp" lại thành 1 bitmask cô đọng — khác cách làm tuần tự "suppress từng box một" của baseline. Ví dụ dễ hiểu: gộp nhiều giá trị (ở đây là các quyết định suppress) bằng chia nhỏ tính song song rồi gộp, thay vì tính tuần tự từng cái.
+**Q: V2 có parallel reduction đúng nghĩa không?**
+Không. “Parallel reduction” đúng nghĩa là nhiều thread cùng gộp max/min/sum theo cây (như V3). V2 song song hoá việc tính các cặp IoU và **mỗi thread tự pack 64 quyết định** vào một `uint64`; không có tree/warp reduction giữa các thread. Đây là điểm phải nói đúng theo code. Catalog yêu cầu reduction là một hướng tối ưu, nhưng V2 hiện tại mới thực hiện bitmask packing + shared-memory tile, chưa bổ sung reduction đúng nghĩa.
 
 **Q: Vậy V2 đã giải quyết xong bài toán song song hoá chưa?**
-Chưa — đây là điểm pptx nêu rõ ở slide "Hạn chế của GPU V2" và nhóm em nên chủ động nói ra: (1) dù đã gom cụm (batch 64 box/khối) và tối ưu phần cứng, V2 **vẫn mang bản chất Greedy NMS** — quyết định giữ/xoá box B vẫn phụ thuộc box điểm cao hơn đã bị xoá hay chưa; (2) việc dựng bitmask bằng parallel reduction chỉ **giảm độ trễ** của bước tính toán, chứ **chưa triệt tiêu được** tư duy so sánh tuần tự nằm trong chính thuật toán gốc. Đây chính là lý do V3 phải đổi hẳn thuật toán (soft suppression) thay vì tiếp tục tối ưu phần cứng như hướng V1→V2.
+Chưa — đây là điểm nhóm nên chủ động nói ra: (1) dù đã dùng tile 64 box và tối ưu memory, V2 **vẫn mang bản chất Greedy NMS** — quyết định giữ/xoá box B phụ thuộc box điểm cao hơn đã bị xoá hay chưa; (2) bitmask packing chỉ giảm dữ liệu phải tải về và chi phí OR, chứ không triệt tiêu tư duy so sánh tuần tự. Đây là lý do V3 phải đổi hẳn thuật toán (soft suppression) thay vì tiếp tục tối ưu phần cứng theo hướng V1→V2.
 
 ---
 
@@ -164,10 +164,10 @@ Cả 2 đều đúng — chênh lệch đến từ khác phần cứng, không p
 Có phương án dự phòng: nếu V3 (khó nhất) không kịp, vẫn đạt 100% chỉ với V1+V2 — tránh "được ăn cả, ngã về không".
 
 **Q: Vì sao batch size = 32?**
-Không phải nhóm tự chọn — do catalog đề tài A4 quy định sẵn ("process 10.000 boxes at batch size 32 in under 5ms"). **V2 hiện đã có API/kernel batch theo chiều ảnh**, nhưng chưa có kết quả CUDA để xác nhận correctness hoặc latency batch-32; V1/V3 vẫn là single-image. Đừng nhầm batch 32 với việc gom 64 box thành một word bitmask: đó là hai khái niệm khác nhau. Xem trạng thái và bằng chứng cần có ở `README.md` và `SUBMISSION_CHECKLIST.md`.
+Không phải nhóm tự chọn — do catalog đề tài A4 quy định sẵn ("process 10.000 boxes at batch size 32 in under 5ms"). **V2 có API/kernel batch theo chiều ảnh** và đã pass CUDA CPU-match ở B=32 (N=50, partial block); benchmark T4 end-to-end tại 32 × 10.000 là **1.002 s/batch**, nên chưa đạt `<5 ms`. V1/V3 vẫn single-image. Đừng nhầm batch 32 với việc gom 64 box thành một word bitmask: đó là hai khái niệm khác nhau. Xem evidence trong `evidence/`.
 
 **Q: Rủi ro nào nhóm lo nhất?**
-(1) V2/V3 chưa từng benchmark trên GPU thật — số liệu kỳ vọng trong code có thể sai lệch so với thực đo; (2) sai số floating-point/tie-break có thể đổi tập box giữ lại dù IoU gần giống hệt (đã biết trước, chấp nhận dung sai 1e-4 + stable sort); (3) V2 batch size 32 cần được JIT/test/benchmark trên CUDA trước khi nộp bản cuối, còn V1/V3 chưa có batch ảnh.
+(1) V2 batch-32 hiện chưa đạt hard target `<5 ms` vì vẫn làm O(BN²), copy mask và greedy CPU; (2) sai số floating-point/tie-break có thể đổi tập box giữ lại dù IoU gần giống hệt (đã biết trước, chấp nhận dung sai 1e-4 + stable sort); (3) V1/V3 chưa có batch ảnh. Các số T4 đã lưu trong `evidence/` để không dùng nhầm số dự kiến.
 
 ---
 
@@ -205,5 +205,5 @@ Không — như N=100 chỉ nhanh 1.2×, phí khởi động lấn át lợi íc
 ## Mẹo khi trả lời (nếu không chắc)
 
 - Không biết chắc → nói thật: "Phần này em chưa triển khai/đo thực tế, nhưng theo lý thuyết thì..." — được đánh giá cao hơn bịa số (xem bài học chung ở `CROSS_GROUP_LESSONS.md`).
-- Nếu bị hỏi quá sâu về dòng code cụ thể của V2/V3 mà chưa kịp nhớ — nhắc lại: code đã hoàn chỉnh, đang ở giai đoạn chờ verify benchmark thật, sẵn sàng demo trực tiếp nếu cần.
+- Nếu bị hỏi quá sâu về dòng code cụ thể của V2/V3 mà chưa kịp nhớ — trả lời theo evidence thật: 50 test CUDA đã pass, benchmark T4 nằm trong `evidence/`; sẵn sàng mở code/demo trực tiếp nếu cần.
 - Nếu quên số liệu chính xác — nói đúng bậc độ lớn ("khoảng 250 mili giây", "tầm 10 lần") vẫn tốt hơn đứng im.

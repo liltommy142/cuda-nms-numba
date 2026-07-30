@@ -7,7 +7,9 @@ lên đúng nơi giảng viên yêu cầu.
 
 - [ ] Repository public hoặc thầy đã được cấp quyền xem.
 - [ ] Link đã gửi cho thầy/Moodle/form: <https://github.com/liltommy142/cuda-nms-numba>
-- [ ] Ghi commit hash cuối cùng đã dùng để chạy test/benchmark: `________________`
+- [ ] Ghi commit hash cuối cùng đã dùng để chạy test/benchmark. HEAD lúc đóng
+      gói local: `3e5bc79c8e7e51d9352d5a743e7855eb62fd0d0e` — **chưa phải
+      commit final** vì working tree còn thay đổi chưa commit.
 - [ ] Mở link ở cửa sổ ẩn danh để chắc chắn thầy xem được.
 - [ ] README có lệnh chạy, dependencies và link tới tài liệu Seminar 2.
 
@@ -16,18 +18,18 @@ lên đúng nơi giảng viên yêu cầu.
 - [ ] Push toàn bộ code cuối: `src/`, `tests/`, `benchmarks/`, `requirements.txt`.
 - [ ] Không commit token, notebook secret hay file cache lớn.
 - [ ] `python -m pytest tests -v` chạy không có failed trên CUDA.
-- [ ] Lưu full log CUDA ở `../evidence/pytest_<gpu>.txt`.
-- [ ] Lưu benchmark JSON raw samples ở `../evidence/benchmark_<gpu>.json`.
-- [ ] Lưu batch-32 report ở `../evidence/batch32_<gpu>.json`.
+- [x] Lưu full log CUDA ở `../evidence/pytest_<gpu>.txt`.
+- [x] Lưu benchmark JSON raw samples ở `../evidence/benchmark_<gpu>.json`.
+- [x] Lưu batch-32 report ở `../evidence/batch32_<gpu>.json`.
 
 ## 3. Slide và report
 
-- [ ] PPTX final đã thay toàn bộ số `[CHỜ COLAB]` bằng evidence thật hoặc ghi rõ pending.
-- [ ] PDF export từ PPTX final.
-- [ ] Report/PDF có: problem, design V1/V2/V3, correctness, benchmark,
+- [x] PPTX final đã thay toàn bộ số `[CHỜ COLAB]` bằng evidence thật hoặc ghi rõ pending.
+- [x] PDF export từ PPTX final.
+- [x] Report/PDF có: problem, design V1/V2/V3, correctness, benchmark,
       environment, limitation và contribution.
-- [ ] Mọi số tốc độ có GPU model, version và tên artifact nguồn.
-- [ ] V3 được ghi là Matrix NMS, không claim khớp greedy torchvision NMS.
+- [x] Mọi số tốc độ có GPU model, version và tên artifact nguồn.
+- [x] V3 được ghi là Matrix NMS, không claim khớp greedy torchvision NMS.
 
 ## 4. Demo và nộp bài
 

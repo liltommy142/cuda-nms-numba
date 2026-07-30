@@ -61,9 +61,18 @@ python src/gpu_v1.py --n 100 --verify
   - `skipped` (test GPU trên máy không có CUDA) → bình thường, không phải lỗi.
   - Muốn xem log chi tiết khi fail: thêm `-vv` hoặc `--tb=long`.
 
-Hiện mọi implementation xử lý một tập box mỗi lần gọi. CUDA kernel batch-size
-32 thật chưa được cài đặt; không dùng benchmark hiện tại để tuyên bố đạt mục
-tiêu `<5 ms`/batch của catalog A4.
+V2 cũng nhận input batch `(B, N, 4)` / `(B, N)` và chạy một CUDA mask-kernel
+cho cả batch; V1/V3 vẫn xử lý một ảnh mỗi lần gọi. Để đo đúng batch-size 32,
+không dùng `run_all.py` mà chạy:
+
+```bash
+python benchmarks/run_v2_batch.py --batch-size 32 --n 10000 \
+  --warmup 2 --repeats 7 --json benchmarks/results/v2_batch32.json
+```
+
+Đây là end-to-end latency (host sort, transfer, GPU kernel, copy mask về và
+CPU greedy resolution). Evidence T4 hiện có là 1.002 s/batch, nên không được
+tuyên bố đạt mục tiêu catalog `<5 ms`/batch.
 
 ## 3. Chạy `--real-boxes` (dùng YOLOv5 thật thay vì dữ liệu giả)
 

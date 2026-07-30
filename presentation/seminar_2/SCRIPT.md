@@ -44,13 +44,13 @@
 
 ## Slide 10 — Kiến trúc V2: Batched NMS & Hardware Optimization (~50s)
 
-"V2 tấn công đúng 2 điểm yếu đó của V1. Thứ nhất, về cách đọc bộ nhớ: V1 lưu box dạng mảng gộp 4 toạ độ, khiến các thread trong cùng một warp đọc bộ nhớ không liền mạch. V2 tách thành 4 mảng riêng x1, y1, x2, y2 — giờ các thread liền kề đọc đúng các ô nhớ liền kề nhau, gom lại thành 1 lần đọc hiệu quả thay vì nhiều lần. Thứ hai, về suppression: V2 gom box thành từng khối 64 và dùng parallel reduction để GPU tự nén luôn kết quả 'ai suppress ai' thành bitmask 64-bit — giảm dung lượng truyền đi khoảng 64 lần so với V1. Vòng lặp trên CPU vẫn còn một lần cho mỗi thứ hạng, nhưng giờ mỗi lần chỉ cần OR hai mảng rất ngắn thay vì so sánh cả một hàng dài như V1. V2 hiện cũng có batch theo chiều ảnh (`grid.z`), nhưng batch-size 32 chưa có evidence CUDA; cần nói rõ V1/V3 vẫn single-image và không nhầm batch ảnh với word bitmask 64 box."
+"V2 tấn công đúng 2 điểm yếu đó của V1. Thứ nhất, về cách đọc bộ nhớ: V1 lưu box dạng mảng gộp 4 toạ độ, khiến các thread trong cùng một warp đọc bộ nhớ không liền mạch. V2 tách thành 4 mảng riêng x1, y1, x2, y2 — giờ các thread liền kề đọc đúng các ô nhớ liền kề nhau. Thứ hai, về suppression: V2 gom target box thành từng word 64 bit. Mỗi thread xử lý một anchor, tính song song quan hệ với 64 target rồi tự đóng gói kết quả 'ai suppress ai' thành bitmask uint64 — giảm dung lượng truyền đi khoảng 64 lần so với V1. Đây là bitmask packing, không phải tree reduction. Vòng lặp trên CPU vẫn còn một lần cho mỗi thứ hạng, nhưng giờ mỗi lần chỉ cần OR các word ngắn thay vì so sánh cả một hàng dài như V1. V2 cũng đã pass CUDA test ở batch 32; kết quả end-to-end là 1.002 giây/batch nên chưa đạt target 5 mili giây."
 
     *(Nếu đã có số Colab thật, chèn: "Đo thật trên Colab, V2 nhanh hơn CPU X lần tại N=10.000." Nếu chưa, nói: "Phần này code đã xong và có bộ test riêng, nhóm em đang chờ chạy benchmark thật trên Colab.")*
 
 ## Slide 11 — Hạn chế của V2 → lý do cần đổi thuật toán (~25s)
 
-"Nhưng V2 vẫn chưa giải quyết xong bài toán gốc. Thứ nhất, nó vẫn mang bản chất Greedy NMS: dù đã gom cụm và tối ưu phần cứng, quyết định giữ hay xoá box B vẫn phụ thuộc vào việc box điểm cao hơn đã bị xoá hay chưa. Thứ hai, việc dựng mặt nạ triệt tiêu bằng parallel reduction chỉ giảm độ trễ, chứ chưa triệt tiêu được tư duy so sánh tuần tự của thuật toán gốc. Đây là lý do V3 phải đổi hẳn thuật toán, không chỉ tối ưu thêm phần cứng."
+"Nhưng V2 vẫn chưa giải quyết xong bài toán gốc. Nó vẫn mang bản chất Greedy NMS: dù GPU đã dựng mask song song, quyết định giữ hay xoá box B vẫn phụ thuộc vào việc box điểm cao hơn đã bị xoá hay chưa. Bitmask packing giảm lượng dữ liệu và chi phí mỗi bước CPU, chứ không triệt tiêu được tư duy so sánh tuần tự của thuật toán gốc. Đây là lý do V3 phải đổi hẳn thuật toán, không chỉ tối ưu thêm phần cứng."
 
 ## Slide 12 — Kiến trúc V3: Matrix NMS (~50s)
 
@@ -78,15 +78,15 @@
 
 ### Slide 16 — Kết quả đo thật (~30s)
 
-"Đây là số liệu thật, không phải lý thuyết. GPU V1 đã đo trên Colab T4: ở N=10.000, CPU mất khoảng 2.5 giây, GPU chỉ mất 256 mili giây — nhanh hơn 9.7 lần, khớp 100% với thư viện chuẩn torchvision. Ở N nhỏ như 100, chỉ nhanh 1.2 lần — vì lúc đó chi phí khởi động GPU và truyền dữ liệu lấn át lợi ích song song. GPU V2 và V3 code đã xong, đang trong quá trình đo benchmark thật, nhóm em sẽ cập nhật số liệu ngay khi có."
+"Đây là số liệu thật trên Tesla T4, median của 7 lần chạy và toàn bộ 50 test đều pass. Ở N=10.000, CPU mất 1.125 giây; V1 còn 226 mili giây, V2 còn 31.6 mili giây — nhanh hơn 35.6 lần. V3 là Matrix NMS nên chỉ so tốc độ như một trade-off: 4.09 mili giây, không nói là output giống hard NMS. Ở N=100, V2 chỉ gần bằng CPU vì overhead GPU chiếm ưu thế."
 
 ### Slide 17 — Đang ở đâu (~20s)
 
-"Tổng kết trạng thái hiện tại một cách trung thực: CPU baseline và GPU V1 đã hoàn thành và đo tốc độ thật. GPU V2 và V3 đã viết xong code, có bộ test tự động đi kèm, đang chờ chạy trên Colab để lấy số liệu benchmark thật. Một điểm nhóm em muốn nói thẳng: mục tiêu batch size 32 theo đúng catalog đề tài A4 vẫn chưa được cài đặt ở cả 3 phiên bản — hiện mỗi lần chạy chỉ xử lý một tập box."
+"Tổng kết trạng thái hiện tại: CPU, V1, V2 và V3 đã pass 50 test trên T4. V2 có batch size 32 đúng về chức năng, nhưng end-to-end median là 1.002 giây cho 32 ảnh × 10.000 box, chưa đạt mục tiêu catalog dưới 5 mili giây. Nguyên nhân là V2 vẫn có pairwise work O(BN²), tải mask về host và vòng greedy CPU. V1/V3 hiện vẫn single-image."
 
 ### Slide 18 — Mục tiêu (~20s)
 
-"Nhóm đặt 3 mức mục tiêu theo đúng catalog, khớp với roadmap đã chiếu ở đầu bài: 75% nếu chỉ có GPU V1 đúng và đo tốc độ — mốc này đã đạt. 100% nếu thêm GPU V2 đạt từ 15 lần trở lên — code đã xong, đang chờ đo. 125% nếu thêm GPU V3 đạt 30 đến 80 lần, dưới 5 mili giây — cũng đã code xong, đang chờ đo."
+"Nhóm đặt 3 mức mục tiêu theo roadmap. Mốc 75% với V1 đã đạt. Mốc 100% với V2 cũng đạt ở single-image: 35.6 lần tại N=10.000. Mốc batch-32 dưới 5 mili giây chưa đạt: kết quả thật của V2 là 1.002 giây mỗi batch. V3 có latency single-image 4.09 mili giây, nhưng vì đổi sang Matrix NMS nên không dùng số đó để tuyên bố hoàn thành hard-NMS batch target."
 
 ### Slide 19 — Phân công (~15s)
 

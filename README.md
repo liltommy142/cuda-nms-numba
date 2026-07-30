@@ -15,10 +15,19 @@ pytest tests/
 # Repeated measurements: median/stddev, raw samples, machine/GPU metadata
 python benchmarks/run_all.py --versions cpu v1 v2 v3 --repeats 7 \
     --json benchmarks/results/measurement.json
+
+# V2 end-to-end batch-32 measurement (one CUDA mask launch for 32 images)
+python benchmarks/run_v2_batch.py --batch-size 32 --n 10000 --warmup 2 --repeats 7 \
+    --json benchmarks/results/v2_batch32.json
 ```
 
-The CUDA implementations currently process one image / one set of boxes per
-call. Fused batch-size-32 execution from the A4 catalog is not implemented.
+V2 accepts either one image or a batch of independent images.  Its GPU kernel
+builds the suppression bitmasks for the complete batch in one launch, while
+the final greedy mask resolution still runs on the CPU per image.  V1 and V3
+currently process one image / one set of boxes per call.  The measured V2
+batch-32 end-to-end latency on the supplied Tesla T4 evidence is 1.002 s for
+32 × 10,000 boxes, so it does not meet the catalog target of `<5 ms/batch`.
+See `presentation/seminar_2/evidence/` for the raw logs and JSON.
 
 See `CSC14116 - Proposal.docx` for the full project proposal.
 
