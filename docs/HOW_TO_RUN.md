@@ -22,7 +22,9 @@ Mở thẳng notebook từ GitHub qua link Colab (không cần tải file về m
 
 Lưu ý: T4 trên Colab **là GPU của NVIDIA** (Tesla T4, kiến trúc Turing, 16GB VRAM) — Google chỉ cho thuê hạ tầng, không phải hãng GPU riêng. Code CUDA/Numba chạy y hệt trên T4 hay bất kỳ GPU NVIDIA nào khác, chỉ khác tốc độ.
 
-Notebook độc lập (tự định nghĩa lại hàm, không `import` từ file `.py`), nên **không cần** tải cả repo lên Colab.
+Notebook GPU clone repo rồi chạy trực tiếp `src/*.py` và `tests/`; đây là để
+kernel, test và benchmark luôn dùng cùng một source of truth. Trước khi mở
+Colab, hãy push commit cần kiểm tra lên GitHub hoặc upload đúng bản repo đó.
 
 ## 2. Chạy local (không cần GPU/Colab)
 
@@ -42,6 +44,10 @@ python src/gpu_v3.py --benchmark
 # Toàn bộ test
 pytest tests/ -v
 
+# Benchmark lặp lại: median/stddev, raw samples và metadata máy/GPU
+python benchmarks/run_all.py --versions cpu v1 v2 v3 --repeats 7 \
+  --json benchmarks/results/measurement.json
+
 # GPU V1 sẽ báo lỗi có chủ đích trên máy không có CUDA (vd. macOS) — bình thường:
 python src/gpu_v1.py --n 100 --verify
 # → "ERROR: No CUDA-capable GPU detected." — đúng thiết kế, không phải bug
@@ -54,6 +60,10 @@ python src/gpu_v1.py --n 100 --verify
   - `failed` → vấn đề thật, cần sửa.
   - `skipped` (test GPU trên máy không có CUDA) → bình thường, không phải lỗi.
   - Muốn xem log chi tiết khi fail: thêm `-vv` hoặc `--tb=long`.
+
+Hiện mọi implementation xử lý một tập box mỗi lần gọi. CUDA kernel batch-size
+32 thật chưa được cài đặt; không dùng benchmark hiện tại để tuyên bố đạt mục
+tiêu `<5 ms`/batch của catalog A4.
 
 ## 3. Chạy `--real-boxes` (dùng YOLOv5 thật thay vì dữ liệu giả)
 

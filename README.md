@@ -11,7 +11,14 @@ pip install -r requirements.txt
 python src/cpu_baseline.py --benchmark
 python src/gpu_v1.py --benchmark   # requires a CUDA GPU
 pytest tests/
+
+# Repeated measurements: median/stddev, raw samples, machine/GPU metadata
+python benchmarks/run_all.py --versions cpu v1 v2 v3 --repeats 7 \
+    --json benchmarks/results/measurement.json
 ```
+
+The CUDA implementations currently process one image / one set of boxes per
+call. Fused batch-size-32 execution from the A4 catalog is not implemented.
 
 See `CSC14116 - Proposal.docx` for the full project proposal.
 
