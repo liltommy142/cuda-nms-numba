@@ -204,6 +204,16 @@ def run_gpu_v3_matrix_nms(
     method: str = "gaussian",
     sigma: float = 2.0
 ) -> np.ndarray:
+    """Apply Matrix NMS and return original indices above ``score_threshold``.
+
+    Unlike :func:`cpu_baseline.run_cpu`, this is soft suppression: its output is
+    intentionally not expected to equal greedy NMS.  See
+    :func:`matrix_nms_reference` for the CPU oracle used by tests.
+    """
+    if method not in {"linear", "gaussian"}:
+        raise ValueError("method must be 'linear' or 'gaussian'")
+    if sigma <= 0:
+        raise ValueError("sigma must be positive")
     n = len(boxes)
     if n == 0:
         return np.array([], dtype=np.int64)
@@ -234,6 +244,79 @@ def run_gpu_v3_matrix_nms(
     keep_ranks = np.where(final_scores > score_threshold)[0]
 
     return order[keep_ranks.astype(np.int64)]
+
+
+def matrix_nms_reference(
+    boxes: np.ndarray,
+    scores: np.ndarray,
+    score_threshold: float = 0.05,
+    method: str = "gaussian",
+    sigma: float = 2.0,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Pure NumPy oracle for this repository's Matrix NMS convention.
+
+    Returns ``(keep_indices, final_scores_in_original_order)``.  It mirrors the
+    two CUDA kernels without using CUDA, so GPU tests can verify both the final
+    decision and the decayed scores rather than only checking that the kernel
+    does not crash.  This routine is deliberately O(N^2) and is for tests/small
+    validation inputs, not benchmarking.
+    """
+    if method not in {"linear", "gaussian"}:
+        raise ValueError("method must be 'linear' or 'gaussian'")
+    if sigma <= 0:
+        raise ValueError("sigma must be positive")
+    if len(boxes) != len(scores):
+        raise ValueError("boxes and scores must have the same length")
+
+    n = len(boxes)
+    if n == 0:
+        return np.array([], dtype=np.int64), np.array([], dtype=np.float32)
+
+    order = np.argsort(-scores, kind="stable")
+    b = np.asarray(boxes[order], dtype=np.float32)
+    s = np.asarray(scores[order], dtype=np.float32).copy()
+    iou_max = np.zeros(n, dtype=np.float32)
+
+    for j in range(1, n):
+        ious = []
+        for i in range(j):
+            ix1 = max(b[i, 0], b[j, 0])
+            iy1 = max(b[i, 1], b[j, 1])
+            ix2 = min(b[i, 2], b[j, 2])
+            iy2 = min(b[i, 3], b[j, 3])
+            inter = max(0.0, ix2 - ix1) * max(0.0, iy2 - iy1)
+            if inter:
+                area_i = (b[i, 2] - b[i, 0]) * (b[i, 3] - b[i, 1])
+                area_j = (b[j, 2] - b[j, 0]) * (b[j, 3] - b[j, 1])
+                ious.append(inter / (area_i + area_j - inter))
+            else:
+                ious.append(0.0)
+        iou_max[j] = max(ious)
+
+    for j in range(1, n):
+        min_decay = 1.0
+        for i in range(j):
+            ix1 = max(b[i, 0], b[j, 0])
+            iy1 = max(b[i, 1], b[j, 1])
+            ix2 = min(b[i, 2], b[j, 2])
+            iy2 = min(b[i, 3], b[j, 3])
+            inter = max(0.0, ix2 - ix1) * max(0.0, iy2 - iy1)
+            if not inter:
+                continue
+            area_i = (b[i, 2] - b[i, 0]) * (b[i, 3] - b[i, 1])
+            area_j = (b[j, 2] - b[j, 0]) * (b[j, 3] - b[j, 1])
+            iou = inter / (area_i + area_j - inter)
+            if iou > iou_max[i]:
+                if method == "linear":
+                    decay = (1.0 - iou) / max(1.0 - iou_max[i], 1e-9)
+                else:
+                    decay = np.exp((iou_max[i] ** 2 - iou ** 2) / sigma)
+                min_decay = min(min_decay, decay)
+        s[j] *= min_decay
+
+    final_scores = np.empty(n, dtype=np.float32)
+    final_scores[order] = s
+    return order[np.flatnonzero(s > score_threshold)].astype(np.int64), final_scores
 
 
 def benchmark(ns=(100, 1_000, 10_000), score_threshold=0.05, seed=0):
