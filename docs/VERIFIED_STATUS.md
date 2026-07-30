@@ -21,11 +21,12 @@ Lệnh:
 python -m pytest tests -v
 ```
 
-Kết quả: **15 passed, 35 skipped**.
+Kết quả: **12 passed, 36 skipped**.
 
-Các test CPU, batch orchestration và CPU oracle của Matrix NMS đã pass. Tất cả
-test GPU bị skip vì `numba.cuda.is_available()` trả về `False`; điều này không
-phải bằng chứng V1/V2/V3 chạy đúng trên GPU.
+Các test CPU baseline, test đơn vị IoU và CPU oracle của Matrix NMS
+(`matrix_nms_reference`) đã pass. Tất cả test GPU bị skip vì
+`numba.cuda.is_available()` trả về `False`; điều này không phải bằng chứng
+V1/V2/V3 chạy đúng trên GPU.
 
 ## Benchmark CPU local
 
