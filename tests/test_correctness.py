@@ -319,16 +319,18 @@ def test_gpu_v2_keeps_non_overlapping():
 
 
 @requires_gpu
-def test_gpu_v2_batched_matches_cpu_at_partial_64_block():
-    """A fused B=3 launch must keep the CPU result for every image.
+@pytest.mark.parametrize("batch_size", [3, 32])
+def test_gpu_v2_batched_matches_cpu_at_partial_64_block(batch_size):
+    """A fused batch launch must keep the CPU result for every image.
 
-    N=50 deliberately exercises the partially-filled final 64-thread block.
+    N=50 deliberately exercises the partially-filled final 64-thread block;
+    B=32 covers the catalog's batch-size target semantically.
     """
     from gpu_v2 import run_gpu_v2
 
     batch_boxes = []
     batch_scores = []
-    for seed in (11, 12, 13):
+    for seed in range(11, 11 + batch_size):
         boxes, scores = load_data(50, seed=seed)
         batch_boxes.append(boxes)
         batch_scores.append(scores)
