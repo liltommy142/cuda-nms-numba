@@ -35,7 +35,8 @@ datasets/
 # Benchmark / profiling output
 *.prof
 profile_output/
-benchmarks/results/
+benchmarks/results/*
+!benchmarks/results/colab_t4_v1_legacy.md
 
 # OS files
 .DS_Store
