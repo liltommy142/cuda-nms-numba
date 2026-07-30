@@ -151,7 +151,7 @@ Không. Về Big-O, GPU V1 vẫn O(n²) — chỉ chia cho p thread chạy cùng
 Không — đo bằng `time.perf_counter()` bao quanh hàm, nhưng có bước "warm-up" (gọi thử 1 lần nhỏ trước) để loại phần biên dịch JIT lần đầu ra khỏi phép đo cho công bằng.
 
 **Q: Nhóm đo cProfile 2 lần (Colab và máy local) mà tỉ lệ suppression/IoU khác nhau — vậy số nào đúng?**
-Cả 2 đều đúng — chênh lệch đến từ khác phần cứng, không phải sai số đo. Trên Colab: ~65% IoU / ~35% suppression. Trên máy local (CPU nhanh hơn): ~59% suppression / ~40% IoU (xem `presentation/cprofile_N10000_local.txt`). CPU nhanh hơn giúp NumPy vector hoá (`iou_one_to_many`) chạy nhanh hơn tương đối, khiến phần vòng lặp Python thuần (`run_cpu`) nổi lên chiếm tỉ trọng lớn hơn. Điều quan trọng không đổi ở cả 2 lần đo: **cả 2 phần đều chiếm tỉ trọng đáng kể**, và **bản thân thuật toán NMS, không phải I/O, là bottleneck** — đây mới là kết luận nhóm dùng để biện minh cho việc đưa NMS lên GPU, không phải con số phần trăm chính xác tuyệt đối.
+Cả 2 đều đúng — chênh lệch đến từ khác phần cứng, không phải sai số đo. Trên Colab: ~65% IoU / ~35% suppression. Trên máy local (CPU nhanh hơn): ~59% suppression / ~40% IoU (xem `cprofile_N10000_local.txt`). CPU nhanh hơn giúp NumPy vector hoá (`iou_one_to_many`) chạy nhanh hơn tương đối, khiến phần vòng lặp Python thuần (`run_cpu`) nổi lên chiếm tỉ trọng lớn hơn. Điều quan trọng không đổi ở cả 2 lần đo: **cả 2 phần đều chiếm tỉ trọng đáng kể**, và **bản thân thuật toán NMS, không phải I/O, là bottleneck** — đây mới là kết luận nhóm dùng để biện minh cho việc đưa NMS lên GPU, không phải con số phần trăm chính xác tuyệt đối.
 
 **Q: Bottleneck thật ở N lớn là tính toán hay truyền dữ liệu?**
 Ở V1, truyền cả ma trận IoU N×N về CPU qua PCIe có thể vượt cả thời gian GPU tính toán, vì dung lượng tăng O(n²) trong khi thời gian tính giảm dần theo số thread. Đây chính là động lực thiết kế của V2 (nén còn O(n²/64) qua bitmask).
@@ -164,10 +164,10 @@ Cả 2 đều đúng — chênh lệch đến từ khác phần cứng, không p
 Có phương án dự phòng: nếu V3 (khó nhất) không kịp, vẫn đạt 100% chỉ với V1+V2 — tránh "được ăn cả, ngã về không".
 
 **Q: Vì sao batch size = 32?**
-Không phải nhóm tự chọn — do catalog đề tài A4 quy định sẵn ("process 10.000 boxes at batch size 32 in under 5ms"), nhóm bám theo để so sánh được với chuẩn chấm điểm. **Hiện chưa implement** ở bất kỳ version nào — mỗi lần chạy vẫn xử lý 1 tập box, đây là việc còn thiếu nhóm nói thẳng ở slide "Đang ở đâu" (xem mục "Slide bổ sung" cuối `OUTLINE_AND_CONTENT.md` — pptx hiện chưa có slide riêng cho phần này). Đừng nhầm với "Batched NMS" ở tiêu đề slide GPU V2 — đó là gom nhóm 64 box để nén bitmask, không liên quan đến batch size 32 này.
+Không phải nhóm tự chọn — do catalog đề tài A4 quy định sẵn ("process 10.000 boxes at batch size 32 in under 5ms"). **V2 hiện đã có API/kernel batch theo chiều ảnh**, nhưng chưa có kết quả CUDA để xác nhận correctness hoặc latency batch-32; V1/V3 vẫn là single-image. Đừng nhầm batch 32 với việc gom 64 box thành một word bitmask: đó là hai khái niệm khác nhau. Xem trạng thái và bằng chứng cần có ở `README.md` và `SUBMISSION_CHECKLIST.md`.
 
 **Q: Rủi ro nào nhóm lo nhất?**
-(1) V2/V3 chưa từng benchmark trên GPU thật — số liệu kỳ vọng trong code có thể sai lệch so với thực đo; (2) sai số floating-point/tie-break có thể đổi tập box giữ lại dù IoU gần giống hệt (đã biết trước, chấp nhận dung sai 1e-4 + stable sort); (3) batch size 32 chưa làm — cần thêm thời gian trước khi nộp bản cuối.
+(1) V2/V3 chưa từng benchmark trên GPU thật — số liệu kỳ vọng trong code có thể sai lệch so với thực đo; (2) sai số floating-point/tie-break có thể đổi tập box giữ lại dù IoU gần giống hệt (đã biết trước, chấp nhận dung sai 1e-4 + stable sort); (3) V2 batch size 32 cần được JIT/test/benchmark trên CUDA trước khi nộp bản cuối, còn V1/V3 chưa có batch ảnh.
 
 ---
 

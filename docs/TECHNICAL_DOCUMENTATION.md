@@ -4,7 +4,7 @@
 >
 > **Phạm vi tài liệu**: Toàn bộ nội dung dưới đây được rút ra trực tiếp từ mã nguồn hiện có trong repo (`src/cpu_baseline.py`, `src/gpu_v1.py`, `src/gpu_v2.py`, `src/gpu_v3.py`, `tests/test_correctness.py`, và 4 notebook `src/*.ipynb`) và từ tài liệu đề xuất dự án (`CSC14116 - Proposal.docx`). Những số liệu benchmark được trích từ proposal hoặc từ output đã lưu thật sẽ được ghi rõ nguồn — tài liệu này không tự chạy lại benchmark hay bịa số liệu.
 >
-> **Trạng thái mã nguồn tại thời điểm cập nhật gần nhất**: cả 4 cài đặt — **CPU baseline**, **GPU V1**, **GPU V2** (coalesced SoA + bitmask suppression), **GPU V3** (Matrix NMS) — đều đã có code đầy đủ trong `src/`. CPU baseline và GPU V1 đã đo tốc độ thật trên Colab T4; GPU V2/V3 code đã xong và có test tự động nhưng **benchmark tốc độ thật trên GPU vẫn đang chờ chạy** — số liệu tốc độ V2/V3 trong tài liệu này được đánh dấu rõ `[kỳ vọng, chưa verify]` ở bất kỳ chỗ nào chưa có số đo thật. Xem trạng thái số liệu đầy đủ, cập nhật nhất tại [`presentation/README.md`](../presentation/README.md#trạng-thái-số-liệu--cái-gì-thật-cái-gì-đang-chờ).
+> **Trạng thái mã nguồn tại thời điểm cập nhật gần nhất**: cả 4 cài đặt — **CPU baseline**, **GPU V1**, **GPU V2** (coalesced SoA + bitmask suppression), **GPU V3** (Matrix NMS) — đều đã có code đầy đủ trong `src/`. CPU baseline và GPU V1 đã đo tốc độ thật trên Colab T4; GPU V2/V3 cần benchmark CUDA lặp lại trước khi dùng số liệu tốc độ. Xem trạng thái và evidence Seminar 2 tại [`presentation/seminar_2/README.md`](../presentation/seminar_2/README.md).
 >
 > ⚠️ **Bản trước của tài liệu này** (trước khi V2/V3 có code) ghi rằng GPU V2/V3 "mới chỉ tồn tại dưới dạng kế hoạch trong proposal, chưa có code" — điều đó **không còn đúng**; cả hai đã được triển khai đầy đủ trong `src/gpu_v2.py` và `src/gpu_v3.py` (xem [mục 2.5](#25-gpu_v2py--giải-thích-từng-hàm-và-cuda-kernel), [mục 2.6](#26-gpu_v3py--giải-thích-từng-hàm-và-cuda-kernel)).
 
@@ -48,11 +48,11 @@ Theo `benchmark()` đã chạy và lưu output thật trong `cpu_baseline.ipynb`
 | 1.000 | 0.0474 s |
 | 10.000 | 1.8166 s |
 
-Lưu ý: `gpu_v1.ipynb` đo lại CPU baseline trong cùng 1 lần chạy để so sánh trực tiếp với GPU V1, và ra số hơi khác (100→0.0069s, 1.000→0.1513s, 10.000→**2.4918s**) — chênh lệch giữa 2 lần đo là dao động bình thường của thời lượng Colab cấp phát (CPU/RAM không cố định giữa các phiên), không phải lỗi. Số ở slide "so tốc độ CPU vs GPU V1" (`presentation/OUTLINE_AND_CONTENT.md`) dùng cặp số từ `gpu_v1.ipynb` vì CPU và GPU được đo cùng 1 lần chạy, đảm bảo so sánh công bằng (cùng điều kiện máy).
+Lưu ý: `gpu_v1.ipynb` đo lại CPU baseline trong cùng 1 lần chạy để so sánh trực tiếp với GPU V1, và ra số hơi khác (100→0.0069s, 1.000→0.1513s, 10.000→**2.4918s**) — chênh lệch giữa 2 lần đo là dao động bình thường của thời lượng Colab cấp phát (CPU/RAM không cố định giữa các phiên), không phải lỗi. Số ở slide "so tốc độ CPU vs GPU V1" (`presentation/seminar_2/OUTLINE_AND_CONTENT.md`) dùng cặp số từ `gpu_v1.ipynb` vì CPU và GPU được đo cùng 1 lần chạy, đảm bảo so sánh công bằng (cùng điều kiện máy).
 
 Theo cell "Profiling" trong `cpu_baseline.ipynb` (cProfile thật ở N=10.000, `sort_stats("cumulative")`, chạy trên Colab): trong tổng thời gian tính toán thuần của thuật toán (loại trừ overhead đo đạc/IPython), hàm tính IoU (`iou_one_to_many`, gọi 6.100 lần) chiếm **tottime 0.837s (~65%)**, phần thân vòng lặp `run_cpu` (sort, bookkeeping suppression — không tính thời gian bên trong `iou_one_to_many`) chiếm **tottime 0.459s (~35%)**. Tỉ lệ 65/34% trùng hợp gần giống bản dự kiến cũ, nhưng **nhãn bị đảo ngược trong bản cũ** (bản cũ ghi 65% là suppression loop, 34% là IoU — thực tế IoU mới là phần chiếm nhiều hơn).
 
-Đã chạy lại cProfile y hệt (cùng `N=10.000, seed=0`) trên máy local (Python 3.11.9, NumPy 1.26.4, Windows) để đối chiếu — kết quả lưu tại [`presentation/cprofile_N10000_local.txt`](../presentation/cprofile_N10000_local.txt): tổng **0.449s**, `run_cpu` tottime 0.266s (~59%), `iou_one_to_many` tottime 0.181s (~40%). Tỉ lệ đảo ngược nhẹ so với Colab (59/40 thay vì 35/65) — đây là khác biệt **phần cứng** (CPU máy local nhanh hơn cho phép NumPy vector hoá, khiến phần vòng lặp Python thuần tương đối chiếm tỉ trọng lớn hơn), không phải sai số đo. Kết luận không đổi ở cả 2 lần đo: **cả 2 phần đều chiếm tỉ trọng đáng kể, bản thân thuật toán NMS — không phải I/O — là bottleneck**.
+Đã chạy lại cProfile y hệt (cùng `N=10.000, seed=0`) trên máy local (Python 3.11.9, NumPy 1.26.4, Windows) để đối chiếu — kết quả lưu tại [`presentation/seminar_2/cprofile_N10000_local.txt`](../presentation/seminar_2/cprofile_N10000_local.txt): tổng **0.449s**, `run_cpu` tottime 0.266s (~59%), `iou_one_to_many` tottime 0.181s (~40%). Tỉ lệ đảo ngược nhẹ so với Colab (59/40 thay vì 35/65) — đây là khác biệt **phần cứng** (CPU máy local nhanh hơn cho phép NumPy vector hoá, khiến phần vòng lặp Python thuần tương đối chiếm tỉ trọng lớn hơn), không phải sai số đo. Kết luận không đổi ở cả 2 lần đo: **cả 2 phần đều chiếm tỉ trọng đáng kể, bản thân thuật toán NMS — không phải I/O — là bottleneck**.
 
 Điều này càng củng cố động lực đưa NMS lên GPU: phần tính IoU giữa mọi cặp box — luôn chiếm tỉ trọng lớn ở cả 2 lần đo — cũng chính là phần **song song hoàn toàn (embarrassingly parallel)** — IoU(i, j) không phụ thuộc kết quả của bất kỳ cặp nào khác — trong khi phần quyết định "giữ hay loại" lại có **phụ thuộc tuần tự** (số phận của box B phụ thuộc việc box A điểm cao hơn đã được giữ hay chưa). Sự căng thẳng giữa hai đặc tính này là chủ đề xuyên suốt của cả dự án.
 
@@ -74,7 +74,7 @@ cuda-nms-numba/
 │   └── gpu_v3.ipynb                 # bản notebook GPU V3 (cần GPU runtime)
 ├── tests/
 │   └── test_correctness.py          # đối chiếu CPU ↔ GPU V1 ↔ GPU V2 ↔ torchvision (V3: sanity check riêng)
-├── presentation/                    # tài liệu chuẩn bị thuyết trình seminar — xem presentation/README.md
+├── presentation/                    # seminar_1/ (proposal) và seminar_2/ (final prep)
 └── docs/
     ├── INDEX.md                     # 🧭 bắt đầu từ đây — mục lục tổng của cả repo
     ├── GLOSSARY.md                  # bảng thuật ngữ dùng chung
@@ -252,7 +252,7 @@ Một block phụ trách đúng 1 box `j`, nhân `scores[j]` với hệ số suy
 
 Pipeline: sắp xếp theo score (CPU) → tải box + score lên GPU (SoA, giống V2) → chạy `_iou_max_kernel` → `cuda.synchronize()` → chạy `_decay_scores_kernel` → tải score đã giảm về CPU → **`np.where(final_scores > score_threshold)`** chọn box giữ lại.
 
-Khác biệt căn bản so với V1/V2: **không còn vòng lặp CPU nào cả**. Cả 2 kernel chạy song song hoàn toàn cho mọi box cùng lúc; quyết định "giữ hay loại" cuối cùng là so sánh ngưỡng điểm số (`score_threshold`), không phải duyệt tuần tự theo rank như Greedy NMS. Đây cũng là lý do **tập box V3 giữ lại không khớp y hệt CPU baseline/V1/V2** khi so theo index — V3 trả lời câu hỏi "điểm tin cậy còn lại sau khi trừ hao phần chồng lấp là bao nhiêu", không phải "giữ hay loại theo đúng thứ tự rank" — một đánh đổi thiết kế có chủ đích, không phải bug (xem `presentation/QA_PREP.md` mục F).
+Khác biệt căn bản so với V1/V2: **không còn vòng lặp CPU nào cả**. Cả 2 kernel chạy song song hoàn toàn cho mọi box cùng lúc; quyết định "giữ hay loại" cuối cùng là so sánh ngưỡng điểm số (`score_threshold`), không phải duyệt tuần tự theo rank như Greedy NMS. Đây cũng là lý do **tập box V3 giữ lại không khớp y hệt CPU baseline/V1/V2** khi so theo index — V3 trả lời câu hỏi "điểm tin cậy còn lại sau khi trừ hao phần chồng lấp là bao nhiêu", không phải "giữ hay loại theo đúng thứ tự rank" — một đánh đổi thiết kế có chủ đích, không phải bug (xem `presentation/seminar_2/QA_PREP.md` mục F).
 
 ---
 
@@ -339,7 +339,7 @@ flowchart LR
 | | Vòng lặp CPU | **Không có** — quyết định giữ/loại chỉ là `np.where(scores > threshold)`, O(n) vector hoá | Đây là điểm khác biệt cốt lõi: V3 loại bỏ hoàn toàn phần tuần tự, không chỉ làm nó rẻ hơn như V2 |
 | | **Tổng** | Vẫn O(n²) công việc tính toán (không giảm bậc), nhưng **không còn phần nào chạy tuần tự trên CPU** | V3 không đổi Big-O của phần tính toán so với V1/V2, nhưng đổi *cấu trúc* bài toán: loại bỏ hẳn chuỗi phụ thuộc tuần tự, không chỉ chia nhỏ công việc |
 
-> **Lưu ý quan trọng**: các dòng liên quan tới V1/V2/V3 ở trên là phân tích lý thuyết dựa trên cấu trúc code. CPU baseline và GPU V1 đã có số đo thật trên Colab T4 (xem `presentation/README.md` mục "Trạng thái số liệu"); GPU V2/V3 **code đã xong nhưng benchmark tốc độ thật vẫn đang chờ chạy** — số liệu tốc độ cụ thể nên lấy từ chạy `python src/gpu_v2.py --benchmark` / `python src/gpu_v3.py --benchmark` trên máy có GPU, hoặc notebook tương ứng (Colab/Kaggle GPU runtime).
+> **Lưu ý quan trọng**: các dòng liên quan tới V1/V2/V3 ở trên là phân tích lý thuyết dựa trên cấu trúc code. CPU baseline và GPU V1 đã có số đo thật trên Colab T4; GPU V2/V3 cần benchmark CUDA trước khi dùng số liệu tốc độ. Lưu artifact ở [`presentation/seminar_2/evidence/`](../presentation/seminar_2/evidence/).
 
 ### 3.3 Ghi chú hiệu năng (performance bottlenecks) và lưu ý khi mở rộng
 

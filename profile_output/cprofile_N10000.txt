@@ -1,0 +1,19 @@
+         18313 function calls in 0.289 seconds
+
+   Ordered by: cumulative time
+   List reduced from 12 to 10 due to restriction <10>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+        1    0.189    0.189    0.289    0.289 /Users/liltommy/Desktop/Study/Applied Parallel Programming/Applied-Parallel-Programming/Project/Source/cuda-nms-numba/cpu_baseline.py:71(run_cpu)
+     6100    0.098    0.000    0.098    0.000 /Users/liltommy/Desktop/Study/Applied Parallel Programming/Applied-Parallel-Programming/Project/Source/cuda-nms-numba/cpu_baseline.py:53(iou_one_to_many)
+        1    0.000    0.000    0.000    0.000 /Users/liltommy/Library/Python/3.14/lib/python/site-packages/numpy/_core/fromnumeric.py:1115(argsort)
+        1    0.000    0.000    0.000    0.000 /Users/liltommy/Library/Python/3.14/lib/python/site-packages/numpy/_core/fromnumeric.py:48(_wrapfunc)
+        1    0.000    0.000    0.000    0.000 {method 'argsort' of 'numpy.ndarray' objects}
+     6101    0.000    0.000    0.000    0.000 {method 'append' of 'list' objects}
+     6103    0.000    0.000    0.000    0.000 {built-in method builtins.len}
+        1    0.000    0.000    0.000    0.000 {built-in method numpy.array}
+        1    0.000    0.000    0.000    0.000 {method 'disable' of '_lsprof.Profiler' objects}
+        1    0.000    0.000    0.000    0.000 {built-in method numpy.zeros}
+
+
+

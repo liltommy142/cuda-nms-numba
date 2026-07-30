@@ -319,6 +319,31 @@ def test_gpu_v2_keeps_non_overlapping():
 
 
 @requires_gpu
+def test_gpu_v2_batched_matches_cpu_at_partial_64_block():
+    """A fused B=3 launch must keep the CPU result for every image.
+
+    N=50 deliberately exercises the partially-filled final 64-thread block.
+    """
+    from gpu_v2 import run_gpu_v2
+
+    batch_boxes = []
+    batch_scores = []
+    for seed in (11, 12, 13):
+        boxes, scores = load_data(50, seed=seed)
+        batch_boxes.append(boxes)
+        batch_scores.append(scores)
+    boxes = np.stack(batch_boxes)
+    scores = np.stack(batch_scores)
+
+    gpu_keeps = run_gpu_v2(boxes, scores, iou_threshold=0.5)
+    assert isinstance(gpu_keeps, list)
+    assert len(gpu_keeps) == len(boxes)
+    for image_idx, gpu_keep in enumerate(gpu_keeps):
+        cpu_keep = run_cpu(boxes[image_idx], scores[image_idx], 0.5)
+        assert set(gpu_keep.tolist()) == set(cpu_keep.tolist())
+
+
+@requires_gpu
 def test_gpu_v2_keeps_all_when_threshold_one():
     """With iou_threshold=1.0 only exact duplicates are suppressed."""
     from gpu_v2 import run_gpu_v2

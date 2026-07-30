@@ -1,6 +1,6 @@
 # Dàn ý & nội dung slide — Nhóm 11: Real-Time NMS on GPU
 
-> **Đã đối chiếu với `Slide_Proposal.pptx`** (bản pptx thật của Tân, commit `10f3026`, 15 slide) — file này giờ theo đúng thứ tự/tiêu đề 15 slide của bản pptx, giữ lại toàn bộ nội dung chi tiết bản cũ (10 slide) bằng cách gộp vào đúng slide tương ứng. Không xoá nội dung cũ nào — phần nào pptx chưa có slide riêng (kết quả đo thật, trạng thái, mục tiêu, phân công) được giữ nguyên ở cuối, đánh dấu **[CHƯA CÓ TRONG PPTX]** để 2 bạn bổ sung thêm slide trước khi thuyết trình. Xem thêm ghi chú đối chiếu đầy đủ trong `README.md`.
+> Bản này kế thừa cấu trúc của [deck Seminar 1](../seminar_1/Slide_Proposal.pptx). Trước khi dùng cho Seminar 2, cập nhật mọi số liệu theo [`evidence/`](evidence/README.md) và checklist hiện hành trong [`README.md`](README.md).
 >
 > Mỗi slide chỉ giữ bullet ngắn + gợi ý hình minh hoạ — chi tiết kỹ thuật đầy đủ nằm ở `SCRIPT.md` (lời nói) và `QA_PREP.md` (hỏi-đáp). Lý do tách như vậy: xem mục "Nhóm 5 — Transformer Attention" trong `CROSS_GROUP_LESSONS.md` (2 lần bị chê "quá chi tiết cho 1 buổi proposal").
 >
@@ -59,7 +59,7 @@ Lưu đồ (flowchart) thuật toán Greedy NMS truyền thống, các bước:
 | 1.000 | 0.0103 s |
 | 10.000 | 0.2846 s |
 
-> ✅ **Nguồn gốc đã xác nhận** (đối chiếu trực tiếp với `CSC14116 - Proposal.docx`): bảng số + tỉ lệ 65/34% trên trích **nguyên văn từ proposal đã nộp** (mục "Measured CPU baseline timing" + "Profiling"), không phải số bịa. Đây là **số đo ở giai đoạn viết proposal ban đầu**, dùng để minh hoạ động lực bài toán (tại sao cần tăng tốc) — **không phải** số liệu Colab đã verify dùng ở phần kết quả (Slide bổ sung "Kết quả đo thật" bên dưới, số thật: CPU N=10.000 = **2.4918s** trên Colab T4). Hai bộ số cùng tồn tại hợp lệ vì khác ngữ cảnh đo (proposal ban đầu vs benchmark Colab sau này), nhưng **đừng trộn lẫn khi trả lời câu hỏi** — nếu bị hỏi "vậy CPU N=10.000 mất bao lâu, 0.28s hay 2.5s?", trả lời: "0.28s là số trong proposal đã nộp, đo lúc viết proposal; 2.49s là số đo lại kỹ trên Colab T4 dùng để so sánh tốc độ GPU — chênh lệch do khác phần cứng/điều kiện đo, không phải sai số". Lưu ý: proposal trích dẫn file `profile_output/cprofile_N10000.txt` làm bằng chứng cProfile, nhưng **file đó không có trong repo** — nếu bị hỏi truy xuất lại, chỉ có `presentation/cprofile_N10000_local.txt` (chạy lại sau này, số khác) làm bằng chứng thật. Xem thêm `QA_PREP.md` mục H và `README.md`.
+> ✅ **Nguồn gốc đã xác nhận** (đối chiếu trực tiếp với `CSC14116 - Proposal.docx`): bảng số + tỉ lệ 65/34% trên trích **nguyên văn từ proposal đã nộp**. Đây là số đo giai đoạn proposal, không phải kết quả cuối. Khi trình bày Seminar 2, dùng artifact trong [`evidence/`](evidence/README.md) cho số liệu benchmark; profile local hiện có là [`cprofile_N10000_local.txt`](cprofile_N10000_local.txt). Xem thêm `QA_PREP.md` mục H và `README.md`.
 
 [Visual: bảng số liệu + biểu đồ cột thời gian CPU theo N — đã có sẵn trong pptx]
 
@@ -136,7 +136,7 @@ Nút thắt cổ chai của V1:
 1. **Coalesced Memory Access**: 4 mảng `x1,y1,x2,y2` riêng (SoA) thay vì 1 mảng box gộp (AoS) → tối ưu hoá cách đọc toạ độ hộp để các luồng liên tiếp truy cập bộ nhớ liền kề, tiết kiệm tối đa băng thông VRAM.
 2. **Batched NMS & Parallel Reduction**: gom cụm các hộp thành khối 64 (do dùng số nguyên 64-bit) và áp dụng kỹ thuật rút gọn song song (parallel reduction) cùng phép toán logic cấp bit để dựng **bitmask suppression** trực tiếp trên GPU — giảm PCIe traffic ~64 lần so với V1.
 
-> ⚠️ **Lưu ý phân biệt chữ "Batched" ở đây**: "Batched NMS" trong tên slide này nghĩa là *gom nhóm 64 box/khối* để nén bitmask (khớp đúng thiết kế `_nms_bitmask_kernel` đã có trong code) — **khác** với "batch size 32" theo catalog đề tài A4 (xử lý nhiều ảnh/nhiều tập box cùng lúc trong 1 lần gọi), phần đó **vẫn chưa được implement** ở bất kỳ version nào (xem Slide "Đang ở đâu" bên dưới). Cần nói rõ khác biệt này nếu bị hỏi, tránh gây hiểu lầm là đã làm xong batch size.
+> ⚠️ **Lưu ý phân biệt chữ "Batched" ở đây**: word bitmask 64 box và batch size 32 là hai khái niệm khác nhau. V2 hiện đã có API/kernel batch theo chiều ảnh (`grid.z` chọn ảnh), nhưng chưa có evidence CUDA cho correctness hay latency batch-32; V1/V3 vẫn single-image. Cần nói rõ ranh giới này nếu bị hỏi.
 
 Vòng lặp CPU cuối vẫn còn (1 lần/rank), nhưng mỗi lần chỉ OR 2 mảng ngắn (N/64 phần tử) thay vì so sánh cả một hàng dài như V1.
 
@@ -238,7 +238,7 @@ GPU V2 / V3: code xong, **đang chờ đo thật trên Colab T4** — `[CHỜ CO
 ✅ GPU V1 — đúng, đã đo tốc độ thật
 ✅ GPU V2 — code xong, test tự động đã viết, **đang chờ verify + benchmark thật trên Colab**
 ✅ GPU V3 — code xong (Matrix NMS), **đang chờ verify + benchmark thật trên Colab**
-⏳ Batch size 32 (theo target catalog A4) — **chưa implement** ở cả 3 version, mỗi lần chạy vẫn xử lý 1 tập box (không nhầm với "Batched NMS" ở Slide 10 — xem ghi chú ở đó)
+⏳ Batch size 32 (theo target catalog A4) — **V2 đã implement nhưng chưa verify CUDA**; V1/V3 vẫn xử lý một tập box. Không nhầm batch ảnh với word bitmask 64 box ở Slide 10.
 
 [Visual: checklist 5 dòng, dấu ✅/⏳ như trên]
 

@@ -15,9 +15,9 @@
 | Muốn xem sơ đồ luồng dữ liệu / độ phức tạp Big-O / các bottleneck đã biết | [TECHNICAL_DOCUMENTATION §3](TECHNICAL_DOCUMENTATION.md#phần-3--tài-liệu-kỹ-thuật-chi-tiết) |
 | Tra 1 thuật ngữ cụ thể (IoU, warp, bitmask, decay factor...) | [`GLOSSARY.md`](GLOSSARY.md) |
 | Đang chuẩn bị buổi thuyết trình seminar | [`../presentation/README.md`](../presentation/README.md) (điểm bắt đầu của bộ tài liệu thuyết trình) |
-| Muốn biết số liệu nào là thật, số nào còn `[CHỜ COLAB]` | [`../presentation/README.md` § Trạng thái số liệu](../presentation/README.md#trạng-thái-số-liệu--cái-gì-thật-cái-gì-đang-chờ) |
-| Chuẩn bị trả lời Q&A / lo bị hỏi khó | [`../presentation/QA_PREP.md`](../presentation/QA_PREP.md) |
-| Muốn biết lớp/giảng viên hay hỏi kiểu gì (từ feedback nhóm khác) | [`../presentation/CROSS_GROUP_LESSONS.md`](../presentation/CROSS_GROUP_LESSONS.md) |
+| Muốn biết số liệu nào là thật, số nào còn chờ CUDA | [`../presentation/seminar_2/README.md`](../presentation/seminar_2/README.md) |
+| Chuẩn bị trả lời Q&A / lo bị hỏi khó | [`../presentation/seminar_2/QA_PREP.md`](../presentation/seminar_2/QA_PREP.md) |
+| Muốn biết lớp/giảng viên hay hỏi kiểu gì (từ feedback nhóm khác) | [`../presentation/seminar_2/CROSS_GROUP_LESSONS.md`](../presentation/seminar_2/CROSS_GROUP_LESSONS.md) |
 
 ## Bản đồ toàn bộ tài liệu
 
@@ -31,10 +31,8 @@ cuda-nms-numba/
 │   └── HOW_TO_RUN.md                → chạy code/test thật, không cần AI
 ├── presentation/
 │   ├── README.md                    → điểm bắt đầu của bộ tài liệu thuyết trình + trạng thái số liệu
-│   ├── OUTLINE_AND_CONTENT.md       → dàn ý 15 slide (khớp Slide_Proposal.pptx)
-│   ├── SCRIPT.md                    → kịch bản nói theo từng slide
-│   ├── QA_PREP.md                   → hỏi-đáp chuẩn bị sẵn + tự rà soát lỗ hổng kỹ thuật
-│   └── CROSS_GROUP_LESSONS.md       → bài học từ feedback 12 nhóm khác trong lớp
+│   ├── seminar_1/                   → proposal đã nộp
+│   └── seminar_2/                   → deck, outline, script, Q&A và evidence Seminar 2
 ├── src/*.py + src/*.ipynb           → code thật (giải thích chi tiết ở TECHNICAL_DOCUMENTATION §2)
 └── tests/test_correctness.py        → đối chiếu CPU ↔ GPU V1 ↔ GPU V2 ↔ torchvision
 ```
@@ -42,5 +40,5 @@ cuda-nms-numba/
 ## Nguyên tắc liên kết trong "vault" này
 
 - Mỗi khái niệm chỉ định nghĩa đầy đủ **một lần** ở [`GLOSSARY.md`](GLOSSARY.md) — chỗ khác chỉ link tới, không định nghĩa lại để tránh 2 bản giải thích lệch nhau theo thời gian.
-- Mỗi số liệu benchmark chỉ có **một nguồn thật** — bảng "Trạng thái số liệu" trong [`../presentation/README.md`](../presentation/README.md#trạng-thái-số-liệu--cái-gì-thật-cái-gì-đang-chờ). Nơi khác trích số liệu nên ghi rõ đang trích từ đâu thay vì chép lại số có thể lệch.
+- Mỗi số liệu benchmark chỉ có **một nguồn thật** — artifact trong [`../presentation/seminar_2/evidence/`](../presentation/seminar_2/evidence/). Nơi khác trích số liệu nên ghi rõ đang trích từ đâu thay vì chép lại số có thể lệch.
 - Link giữa các file `.md` dùng đường dẫn tương đối chuẩn (`[chữ](đường/dẫn.md#anchor)`), không dùng cú pháp `[[wikilink]]` — để đảm bảo hiển thị đúng trên GitHub lẫn khi mở cả repo bằng Obsidian.
