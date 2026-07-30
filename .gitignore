@@ -32,11 +32,10 @@ datasets/
 *.tar
 *.tar.gz
 
-# Benchmark / profiling output
+# Benchmark / profiling artefacts are TRACKED on purpose: docs/GPU_VALIDATION_RUNBOOK.md
+# requires every number quoted in the report or slides to ship with the run that produced
+# it. Only raw binary profiler dumps stay ignored.
 *.prof
-profile_output/
-benchmarks/results/*
-!benchmarks/results/colab_t4_v1_legacy.md
 
 # OS files
 .DS_Store
