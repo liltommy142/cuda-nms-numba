@@ -2,7 +2,7 @@
 
 Strategy
 --------
-* GPU side  : compute the full N×N IoU matrix in one kernel launch.
+* GPU side  : compute the full NxN IoU matrix in one kernel launch.
               One CUDA thread handles one (i, j) pair → N² threads run
               simultaneously.  All pairs are independent, so there is no
               synchronisation overhead (embarrassingly parallel).

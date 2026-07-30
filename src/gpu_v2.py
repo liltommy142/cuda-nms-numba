@@ -152,7 +152,7 @@ def _iou_matrix_coalesced_kernel(x1, y1, x2, y2, iou_out):
 
 
 # ---------------------------------------------------------------------------
-# CUDA kernel 2 -- Full on-device greedy NMS suppression
+# CUDA kernel 2 -- GPU bitmask construction for greedy NMS
 # ---------------------------------------------------------------------------
 
 @cuda.jit
@@ -163,10 +163,10 @@ def _nms_bitmask_kernel(x1, y1, x2, y2, mask_out, n, iou_threshold):
     matrix where mask_out[by, i] contains a 64-bit integer representing
     whether box i is suppressed by the 64 boxes in column block `by`.
 
-    This achieves massive parallelism:
-    - Eliminates the sequential O(N) loop on the GPU
+    This computes the pairwise suppression relation in parallel:
     - Uses all GPU Streaming Multiprocessors (SMs), not just one
-    - PCIe transfer is only O(N), not O(N^2) (bitmask is ~12.5MB at N=10000)
+    - Compresses the PCIe download to O(N^2 / 64), about 12.5MB at N=10,000
+    - Leaves the final greedy keep/suppress decision to a CPU bitwise-OR loop
     
     Parameters
     ----------
@@ -295,7 +295,7 @@ def run_gpu_v2(
         1. Sort by score (CPU, O(N log N))
         2. SoA boxes -> GPU (O(N) PCIe upload)
         3. _nms_bitmask_kernel -> d_mask on GPU (Parallel reduction to mask)
-        4. d_mask -> CPU (O(N) PCIe download, ~12MB for N=10000)
+        4. d_mask -> CPU (O(N^2 / 64) PCIe download, ~12MB for N=10000)
         5. CPU bitwise OR reduction -> keep indices
     """
     n = len(boxes)
