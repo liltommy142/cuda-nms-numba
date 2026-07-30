@@ -17,6 +17,7 @@ _SRC = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)),
 sys.path.insert(0, _SRC)
 
 from cpu_baseline import iou_one_to_many, load_data, run_cpu  # noqa: E402
+from gpu_v3 import matrix_nms_reference  # noqa: E402
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -224,13 +225,25 @@ def test_gpu_v1_matches_cpu_baseline(n):
 # -----------------------------------------------------------------------------
 
 @requires_gpu
+def test_gpu_v2_iou_helper_returns_host_array():
+    """compute_iou_matrix_gpu_v2 must return a host ndarray, same as the V1
+    helper. Four tests previously called .copy_to_host() on its result and
+    would have crashed on the first GPU machine that ran them."""
+    from gpu_v2 import compute_iou_matrix_gpu_v2
+
+    boxes, _ = load_data(8, seed=0)
+    out = compute_iou_matrix_gpu_v2(boxes)
+    assert isinstance(out, np.ndarray), f"expected host ndarray, got {type(out)}"
+    assert not hasattr(out, "copy_to_host")
+
+
+@requires_gpu
 def test_gpu_v2_iou_matrix_diagonal_is_one():
     """IoU(box_i, box_i) must equal 1.0 for every box (coalesced SoA kernel)."""
     from gpu_v2 import compute_iou_matrix_gpu_v2
 
     boxes, _ = load_data(20, seed=0)
-    d_iou = compute_iou_matrix_gpu_v2(boxes)
-    iou_mat = d_iou.copy_to_host()
+    iou_mat = compute_iou_matrix_gpu_v2(boxes)
     assert np.allclose(np.diag(iou_mat), 1.0, atol=1e-4), \
         "Diagonal of V2 IoU matrix should be all 1s"
 
@@ -241,8 +254,7 @@ def test_gpu_v2_iou_matrix_is_symmetric():
     from gpu_v2 import compute_iou_matrix_gpu_v2
 
     boxes, _ = load_data(30, seed=1)
-    d_iou = compute_iou_matrix_gpu_v2(boxes)
-    iou_mat = d_iou.copy_to_host()
+    iou_mat = compute_iou_matrix_gpu_v2(boxes)
     assert np.allclose(iou_mat, iou_mat.T, atol=1e-5), \
         "V2 IoU matrix should be symmetric"
 
@@ -253,8 +265,7 @@ def test_gpu_v2_iou_matrix_matches_cpu():
     from gpu_v2 import compute_iou_matrix_gpu_v2
 
     boxes, _ = load_data(50, seed=2)
-    d_iou = compute_iou_matrix_gpu_v2(boxes)
-    iou_mat_gpu = d_iou.copy_to_host()
+    iou_mat_gpu = compute_iou_matrix_gpu_v2(boxes)
 
     n = len(boxes)
     iou_mat_cpu = np.zeros((n, n), dtype=np.float32)
@@ -273,8 +284,7 @@ def test_gpu_v2_iou_matrix_matches_v1():
 
     boxes, _ = load_data(50, seed=3)
     iou_v1 = compute_iou_matrix_gpu(boxes)          # host array from V1
-    d_iou_v2 = compute_iou_matrix_gpu_v2(boxes)
-    iou_v2 = d_iou_v2.copy_to_host()
+    iou_v2 = compute_iou_matrix_gpu_v2(boxes)
 
     assert np.allclose(iou_v1, iou_v2, atol=1e-5), \
         "GPU V2 IoU matrix should match GPU V1 IoU matrix within 1e-5"
@@ -411,6 +421,32 @@ def test_gpu_v2_matches_cpu_with_score_ties():
 # GPU V3 -- Matrix NMS unit tests
 # -----------------------------------------------------------------------------
 
+def test_matrix_nms_reference_non_overlapping_preserves_scores():
+    boxes = np.array([[0, 0, 10, 10], [20, 20, 30, 30]], dtype=np.float32)
+    scores = np.array([0.9, 0.8], dtype=np.float32)
+    keep, final_scores = matrix_nms_reference(boxes, scores, score_threshold=0.05)
+    assert list(keep) == [0, 1]
+    assert np.allclose(final_scores, scores)
+
+
+def test_matrix_nms_reference_gaussian_duplicate_has_known_decay():
+    boxes = np.array([[0, 0, 10, 10], [0, 0, 10, 10]], dtype=np.float32)
+    scores = np.array([0.9, 0.8], dtype=np.float32)
+    keep, final_scores = matrix_nms_reference(
+        boxes, scores, score_threshold=0.5, method="gaussian", sigma=2.0
+    )
+    assert list(keep) == [0]
+    assert np.isclose(final_scores[1], 0.8 * np.exp(-0.5), atol=1e-6)
+
+
+@pytest.mark.parametrize("method", ["linear", "gaussian"])
+def test_matrix_nms_reference_validates_method_and_sigma(method):
+    boxes, scores = load_data(2)
+    with pytest.raises(ValueError):
+        matrix_nms_reference(boxes, scores, method=method, sigma=0)
+    with pytest.raises(ValueError):
+        matrix_nms_reference(boxes, scores, method="invalid")
+
 @requires_gpu
 def test_gpu_v3_suppresses_duplicate():
     """V3 Matrix NMS must suppress exact duplicate boxes."""
@@ -470,3 +506,19 @@ def test_gpu_v3_sanity(n):
     assert len(keep) <= n, "Kept boxes cannot exceed total boxes"
     assert len(set(keep)) == len(keep), "Kept indices must be unique"
     assert all(0 <= idx < n for idx in keep), "Indices must be in [0, N-1]"
+
+
+@requires_gpu
+@pytest.mark.parametrize("method", ["linear", "gaussian"])
+def test_gpu_v3_matches_matrix_nms_reference(method):
+    """GPU V3 must reproduce the tested CPU Matrix-NMS oracle on a small input."""
+    from gpu_v3 import run_gpu_v3_matrix_nms
+
+    boxes, scores = load_data(30, seed=31)
+    expected_keep, _ = matrix_nms_reference(
+        boxes, scores, score_threshold=0.05, method=method, sigma=2.0
+    )
+    actual_keep = run_gpu_v3_matrix_nms(
+        boxes, scores, score_threshold=0.05, method=method, sigma=2.0
+    )
+    assert np.array_equal(actual_keep, expected_keep)
