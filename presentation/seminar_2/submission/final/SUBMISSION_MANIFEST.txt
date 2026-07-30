@@ -1,0 +1,52 @@
+SEMINAR 2 SUBMISSION — CUDA NMS WITH NUMBA
+
+Course: CSC14116 — Applied Parallel Programming
+Topic: A4 — Real-Time Non-Maximum Suppression
+Group: 11
+Members:
+- Lê Quang Tân — 22127378
+- Phùng Quốc Tuấn — 19127616
+
+Repository:
+https://github.com/liltommy142/cuda-nms-numba
+
+LOCAL HEAD WHEN PACKAGE WAS PREPARED:
+3e5bc79c8e7e51d9352d5a743e7855eb62fd0d0e
+
+IMPORTANT:
+The working tree contains uncommitted Seminar 2 changes and final evidence.
+Create and push a final commit before submission, then replace the commit hash
+above and in submission/list.md with that pushed commit.
+
+FILES IN THE BUNDLE:
+- Seminar_2_Final_T4.pptx — editable final slide deck.
+- Seminar_2_Final_T4.pdf — exported 22-page final deck.
+- evidence/pytest_t4_final.txt — 50/50 CUDA test log.
+- evidence/benchmark_t4_single.json — raw repeated single-image measurements.
+- evidence/benchmark_t4_single.txt — terminal benchmark log.
+- evidence/batch32_t4.json — raw repeated V2 batch-32 measurements.
+- evidence/batch32_t4.txt — terminal batch benchmark log.
+- seminar_2_README.md — verified state and evidence index.
+- REPRODUCIBILITY.txt — commands and interpretation notes.
+- SHA256SUMS.txt — integrity checksums for packaged files.
+
+VERIFIED RESULT SUMMARY:
+- Environment: Tesla T4, compute capability 7.5.
+- Python 3.12.13, NumPy 2.0.2, Numba 0.60.0.
+- Correctness: 50/50 tests passed.
+- Single-image N=10,000:
+  CPU 1125.272 ms; V1 226.107 ms; V2 31.599 ms; V3 4.092 ms.
+- V1: approximately 5.0x CPU.
+- V2: 35.6x CPU and preserves greedy hard-NMS semantics.
+- V3: Matrix NMS / soft suppression; not equivalent to torchvision hard NMS.
+- Batch correctness: B=32, N=50 test passed.
+- Batch latency input: B=32, N=10,000.
+- V2 batch median: 1002.239 ms/batch; target <5 ms/batch is not met.
+
+MANUAL GATES STILL REQUIRED:
+1. Commit and push the final working tree; record the pushed commit hash.
+2. Confirm repository access in an incognito/private browser.
+3. Rehearse the full deck; both members must explain V1, V2 and V3.
+4. Prepare/run the demo or fallback recording/screenshots.
+5. Upload to the instructor's required destination before the deadline.
+6. Re-open every uploaded file/link and confirm access.

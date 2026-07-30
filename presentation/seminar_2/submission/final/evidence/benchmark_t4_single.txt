@@ -1,0 +1,26 @@
+{
+  "timestamp_utc": "2026-07-30T21:00:18.558320+00:00",
+  "python": "3.12.13 (main, Mar  4 2026, 09:23:07) [GCC 11.4.0]",
+  "platform": "Linux-6.6.122+-x86_64-with-glibc2.35",
+  "numpy": "2.0.2",
+  "numba": "0.60.0",
+  "cuda_available": true,
+  "gpu": "Tesla T4",
+  "compute_capability": [
+    7,
+    5
+  ]
+}
+N=   100 cpu: median=    2.389 ms  std=  0.113 ms
+N=   100  v1: median=    0.777 ms  std=  0.059 ms
+N=   100  v2: median=    2.309 ms  std=  0.283 ms
+N=   100  v3: median=    1.395 ms  std=  0.159 ms
+N=  1000 cpu: median=   38.777 ms  std=  0.484 ms
+N=  1000  v1: median=    7.454 ms  std=  0.985 ms
+N=  1000  v2: median=    3.729 ms  std=  0.237 ms
+N=  1000  v3: median=    1.376 ms  std=  0.083 ms
+N= 10000 cpu: median= 1125.272 ms  std=323.186 ms
+N= 10000  v1: median=  226.107 ms  std= 13.969 ms
+N= 10000  v2: median=   31.599 ms  std=  5.360 ms
+N= 10000  v3: median=    4.092 ms  std=  0.158 ms
+Wrote presentation/seminar_2/evidence/benchmark_t4_single.json
