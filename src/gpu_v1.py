@@ -32,6 +32,12 @@ import numpy as np
 # ── make cpu_baseline importable when this file is run directly ───────────────
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from cpu_baseline import load_data, run_cpu  # noqa: E402
+from nms_common import (  # noqa: E402
+    stable_class_partitions,
+    stable_score_order,
+    validate_candidates,
+    validate_iou_threshold,
+)
 
 try:
     from numba import cuda
@@ -126,37 +132,13 @@ def compute_iou_matrix_gpu(boxes: np.ndarray) -> np.ndarray:
     return d_iou.copy_to_host()
 
 
-def run_gpu_v1(
-    boxes: np.ndarray,
-    scores: np.ndarray,
-    iou_threshold: float = 0.5,
-) -> np.ndarray:
-    """GPU V1 Non-Maximum Suppression.
-
-    1. Sort boxes by score (stable, on CPU).
-    2. Upload score-sorted boxes → GPU; compute N×N IoU matrix with the kernel.
-    3. Download IoU matrix → CPU.
-    4. Greedy suppression using *vectorized* NumPy row-slices  (no inner Python
-       loop — this was the critical fix vs. the naïve nested-loop version).
-
-    Parameters
-    ----------
-    boxes         : (N, 4) float32  [x1, y1, x2, y2]
-    scores        : (N,)   float32  confidence scores
-    iou_threshold : float           boxes with IoU > threshold are suppressed
-
-    Returns
-    -------
-    keep : (K,) int64  indices of kept boxes in original array, descending score
-    """
+def _run_gpu_v1_single_class(boxes: np.ndarray, iou_threshold: float) -> np.ndarray:
+    """Run the original V1 full-IoU-matrix strategy for one score-sorted class."""
     n = len(boxes)
     if n == 0:
         return np.array([], dtype=np.int64)
-    order = np.argsort(-scores, kind="stable")   # stable: deterministic on score ties
 
-    # Sort boxes/scores into score-descending order before uploading.
-    # After this, row i of the IoU matrix corresponds to the i-th highest-score box.
-    boxes_sorted = np.ascontiguousarray(boxes[order], dtype=np.float32)
+    boxes_sorted = np.ascontiguousarray(boxes, dtype=np.float32)
 
     # ── GPU: compute full N×N IoU matrix (embarrassingly parallel) ────────────
     iou_matrix = compute_iou_matrix_gpu(boxes_sorted)  # shape (N, N)
@@ -176,8 +158,33 @@ def run_gpu_v1(
             # lower-score box in a single C-speed array operation.
             suppressed[i + 1 :] |= iou_matrix[i, i + 1 :] > iou_threshold
 
-    # Map sorted ranks back to original box indices
-    return order[np.array(keep_ranks, dtype=np.int64)]
+    return np.asarray(keep_ranks, dtype=np.int64)
+
+
+def run_gpu_v1(
+    boxes: np.ndarray,
+    scores: np.ndarray,
+    class_ids=None,
+    iou_threshold: float = 0.5,
+) -> np.ndarray:
+    """Class-aware hard NMS using V1's one-thread-per-pair IoU matrix.
+
+    Each class is still processed by V1's deliberately naive full ``N×N``
+    CUDA matrix and CPU greedy resolver.  The wrapper restores original input
+    indices and stable global score ordering after independent class passes.
+    """
+    if class_ids is None:
+        class_ids = np.zeros(len(scores), dtype=np.int32)
+    boxes, scores, class_ids = validate_candidates(boxes, scores, class_ids)
+    threshold = validate_iou_threshold(iou_threshold)
+    if len(boxes) == 0:
+        return np.empty(0, dtype=np.int64)
+
+    kept: list[np.ndarray] = []
+    for indices in stable_class_partitions(scores, class_ids):
+        local_keep = _run_gpu_v1_single_class(boxes[indices], threshold)
+        kept.append(indices[local_keep])
+    return stable_score_order(np.concatenate(kept), scores)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -196,7 +203,7 @@ def benchmark(
     """
     # warm up: JIT compile the kernel on a small problem
     _boxes, _scores = load_data(10, seed=seed)
-    _ = run_gpu_v1(_boxes, _scores, iou_threshold)
+    _ = run_gpu_v1(_boxes, _scores, iou_threshold=iou_threshold)
 
     header = f"{'N':>8} | {'CPU (s)':>10} | {'GPU V1 (s)':>12} | {'Speedup':>8}"
     print(header)
@@ -207,11 +214,11 @@ def benchmark(
         boxes, scores = load_data(n, seed=seed)
 
         t0 = time.perf_counter()
-        run_cpu(boxes, scores, iou_threshold)
+        run_cpu(boxes, scores, iou_threshold=iou_threshold)
         cpu_t = time.perf_counter() - t0
 
         t0 = time.perf_counter()
-        run_gpu_v1(boxes, scores, iou_threshold)
+        run_gpu_v1(boxes, scores, iou_threshold=iou_threshold)
         gpu_t = time.perf_counter() - t0
 
         speedup = cpu_t / gpu_t
@@ -242,15 +249,15 @@ def main() -> None:
 
     print(f"Generated {len(boxes)} synthetic boxes.")
     print("Warming up GPU (JIT compile)…")
-    _ = run_gpu_v1(boxes[:16], scores[:16], args.iou_threshold)
+    _ = run_gpu_v1(boxes[:16], scores[:16], iou_threshold=args.iou_threshold)
 
     t0 = time.perf_counter()
-    keep = run_gpu_v1(boxes, scores, args.iou_threshold)
+    keep = run_gpu_v1(boxes, scores, iou_threshold=args.iou_threshold)
     elapsed = time.perf_counter() - t0
     print(f"GPU V1 NMS: kept {len(keep)}/{len(boxes)} boxes in {elapsed:.4f}s")
 
     if args.verify:
-        cpu_keep = set(run_cpu(boxes, scores, args.iou_threshold).tolist())
+        cpu_keep = set(run_cpu(boxes, scores, iou_threshold=args.iou_threshold).tolist())
         gpu_keep = set(keep.tolist())
         match = cpu_keep == gpu_keep
         print(f"Exact match with cpu_baseline: {match}")

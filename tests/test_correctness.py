@@ -178,6 +178,27 @@ def test_cpu_cli_labels_synthetic_nms_scope():
     assert "benchmark_scope: nms_only_synthetic" in completed.stdout
 
 
+def test_gpu_v1_wrapper_partitions_classes_without_cuda(monkeypatch):
+    import gpu_v1
+
+    def keep_every_rank(class_boxes, iou_threshold):
+        return np.arange(len(class_boxes), dtype=np.int64)
+
+    monkeypatch.setattr(gpu_v1, "_run_gpu_v1_single_class", keep_every_rank)
+    boxes, scores, class_ids = load_synthetic_candidates(4, seed=5)
+    scores = np.array([0.5, 0.9, 0.7, 0.8], dtype=np.float32)
+    class_ids = np.array([0, 1, 0, 1], dtype=np.int32)
+    assert gpu_v1.run_gpu_v1(boxes, scores, class_ids).tolist() == [1, 3, 2, 0]
+
+
+@requires_gpu
+def test_gpu_v1_matches_cpu_and_torchvision_per_class():
+    from gpu_v1 import run_gpu_v1
+
+    boxes, scores, class_ids = load_synthetic_candidates(300, seed=22)
+    assert np.array_equal(run_gpu_v1(boxes, scores, class_ids), run_cpu(boxes, scores, class_ids))
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # CPU baseline — reference match (requires torch + torchvision)
 # ─────────────────────────────────────────────────────────────────────────────
@@ -297,7 +318,7 @@ def test_gpu_v1_matches_cpu_baseline(n):
     iou_threshold = 0.5
 
     cpu_keep = set(run_cpu(boxes, scores, iou_threshold=iou_threshold).tolist())
-    gpu_keep = set(run_gpu_v1(boxes, scores, iou_threshold).tolist())
+    gpu_keep = set(run_gpu_v1(boxes, scores, iou_threshold=iou_threshold).tolist())
 
     assert cpu_keep == gpu_keep, (
         f"N={n}: GPU V1 kept {len(gpu_keep)} boxes, CPU kept {len(cpu_keep)} boxes\n"
@@ -477,7 +498,7 @@ def test_gpu_v2_matches_gpu_v1(n):
     boxes, scores = load_data(n, seed=99)
     iou_threshold = 0.5
 
-    v1_keep = set(run_gpu_v1(boxes, scores, iou_threshold).tolist())
+    v1_keep = set(run_gpu_v1(boxes, scores, iou_threshold=iou_threshold).tolist())
     v2_keep = set(run_gpu_v2(boxes, scores, iou_threshold).tolist())
 
     assert v1_keep == v2_keep, (
