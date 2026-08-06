@@ -18,6 +18,10 @@ sys.path.insert(0, _SRC)
 
 from cpu_baseline import iou_one_to_many, load_data, run_cpu  # noqa: E402
 from gpu_v3 import matrix_nms_reference  # noqa: E402
+from nms_common import (  # noqa: E402
+    load_synthetic_candidates,
+    validate_candidates,
+)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -49,6 +53,32 @@ requires_torch = pytest.mark.skipif(
     not _torch_available(),
     reason="torch / torchvision not installed — skipping reference-match tests",
 )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Canonical class-aware candidate contract
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_validate_candidates_normalizes_dtypes_and_shapes():
+    boxes, scores, class_ids = validate_candidates([[0, 0, 2, 2]], [0.9], [3])
+    assert (boxes.dtype, scores.dtype, class_ids.dtype) == (
+        np.float32,
+        np.float32,
+        np.int32,
+    )
+    assert boxes.shape == (1, 4)
+
+
+def test_validate_candidates_rejects_invalid_geometry():
+    with pytest.raises(ValueError, match="x2 must be greater"):
+        validate_candidates([[3, 0, 2, 1]], [0.9], [0])
+
+
+def test_synthetic_candidates_are_deterministic_and_multiclass():
+    first = load_synthetic_candidates(100, seed=8)
+    second = load_synthetic_candidates(100, seed=8)
+    assert all(np.array_equal(a, b) for a, b in zip(first, second))
+    assert len(np.unique(first[2])) > 1
 
 
 # ─────────────────────────────────────────────────────────────────────────────
