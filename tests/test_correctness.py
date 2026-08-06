@@ -191,12 +191,56 @@ def test_gpu_v1_wrapper_partitions_classes_without_cuda(monkeypatch):
     assert gpu_v1.run_gpu_v1(boxes, scores, class_ids).tolist() == [1, 3, 2, 0]
 
 
+def test_gpu_v2_wrapper_partitions_batched_classes_without_cuda(monkeypatch):
+    import gpu_v2
+
+    def keep_every_rank(class_boxes, class_scores, iou_threshold):
+        return np.arange(len(class_boxes), dtype=np.int64)
+
+    monkeypatch.setattr(gpu_v2, "_run_gpu_v2_single_class", keep_every_rank)
+    boxes, _, _ = load_synthetic_candidates(4, seed=6)
+    scores = np.array([0.5, 0.9, 0.7, 0.8], dtype=np.float32)
+    class_ids = np.array([0, 1, 0, 1], dtype=np.int32)
+    single = gpu_v2.run_gpu_v2(boxes, scores, class_ids)
+    batched = gpu_v2.run_gpu_v2(
+        np.stack([boxes, boxes]),
+        np.stack([scores, scores]),
+        np.stack([class_ids, class_ids]),
+    )
+    assert single.tolist() == [1, 3, 2, 0]
+    assert [item.tolist() for item in batched] == [[1, 3, 2, 0], [1, 3, 2, 0]]
+
+
 @requires_gpu
 def test_gpu_v1_matches_cpu_and_torchvision_per_class():
     from gpu_v1 import run_gpu_v1
 
     boxes, scores, class_ids = load_synthetic_candidates(300, seed=22)
     assert np.array_equal(run_gpu_v1(boxes, scores, class_ids), run_cpu(boxes, scores, class_ids))
+
+
+@requires_gpu
+def test_gpu_v2_matches_cpu_per_class():
+    from gpu_v2 import run_gpu_v2
+
+    boxes, scores, class_ids = load_synthetic_candidates(300, seed=32)
+    assert np.array_equal(run_gpu_v2(boxes, scores, class_ids), run_cpu(boxes, scores, class_ids))
+
+
+@requires_gpu
+def test_gpu_v2_batched_multiclass_matches_cpu():
+    from gpu_v2 import run_gpu_v2
+
+    samples = [load_synthetic_candidates(50, seed=i) for i in range(3)]
+    actual = run_gpu_v2(
+        np.stack([sample[0] for sample in samples]),
+        np.stack([sample[1] for sample in samples]),
+        np.stack([sample[2] for sample in samples]),
+    )
+    assert all(
+        np.array_equal(result, run_cpu(*sample))
+        for result, sample in zip(actual, samples)
+    )
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -479,7 +523,7 @@ def test_gpu_v2_matches_cpu_baseline(n):
     iou_threshold = 0.5
 
     cpu_keep = set(run_cpu(boxes, scores, iou_threshold=iou_threshold).tolist())
-    gpu_keep = set(run_gpu_v2(boxes, scores, iou_threshold).tolist())
+    gpu_keep = set(run_gpu_v2(boxes, scores, iou_threshold=iou_threshold).tolist())
 
     assert cpu_keep == gpu_keep, (
         f"N={n}: GPU V2 kept {len(gpu_keep)} boxes, CPU kept {len(cpu_keep)} boxes\n"
@@ -499,7 +543,7 @@ def test_gpu_v2_matches_gpu_v1(n):
     iou_threshold = 0.5
 
     v1_keep = set(run_gpu_v1(boxes, scores, iou_threshold=iou_threshold).tolist())
-    v2_keep = set(run_gpu_v2(boxes, scores, iou_threshold).tolist())
+    v2_keep = set(run_gpu_v2(boxes, scores, iou_threshold=iou_threshold).tolist())
 
     assert v1_keep == v2_keep, (
         f"N={n}: GPU V2 kept {len(v2_keep)} boxes, GPU V1 kept {len(v1_keep)} boxes\n"
@@ -517,7 +561,7 @@ def test_gpu_v2_various_thresholds(iou_threshold):
     boxes, scores = load_data(200, seed=7)
 
     cpu_keep = set(run_cpu(boxes, scores, iou_threshold=iou_threshold).tolist())
-    gpu_keep = set(run_gpu_v2(boxes, scores, iou_threshold).tolist())
+    gpu_keep = set(run_gpu_v2(boxes, scores, iou_threshold=iou_threshold).tolist())
 
     assert cpu_keep == gpu_keep, (
         f"iou_threshold={iou_threshold}: GPU V2 kept {len(gpu_keep)}, "
@@ -543,7 +587,7 @@ def test_gpu_v2_matches_cpu_with_score_ties():
 
     iou_threshold = 0.5
     cpu_keep = set(run_cpu(boxes, scores, iou_threshold=iou_threshold).tolist())
-    gpu_keep = set(run_gpu_v2(boxes, scores, iou_threshold).tolist())
+    gpu_keep = set(run_gpu_v2(boxes, scores, iou_threshold=iou_threshold).tolist())
 
     assert cpu_keep == gpu_keep, (
         f"Tie-heavy scores: GPU V2 kept {len(gpu_keep)}, CPU kept {len(cpu_keep)}\n"

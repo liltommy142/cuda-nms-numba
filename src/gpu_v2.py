@@ -25,6 +25,12 @@ import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from cpu_baseline import load_data, run_cpu  # noqa: E402
 from gpu_v1 import run_gpu_v1              # noqa: E402
+from nms_common import (  # noqa: E402
+    stable_class_partitions,
+    stable_score_order,
+    validate_candidates,
+    validate_iou_threshold,
+)
 
 try:
     from numba import cuda
@@ -271,12 +277,12 @@ def _resolve_greedy_mask(mask: np.ndarray, n: int) -> np.ndarray:
     return np.asarray(keep_ranks, dtype=np.int64)
 
 
-def run_gpu_v2_batched(
+def _run_gpu_v2_batched_single_class(
     boxes: np.ndarray,
     scores: np.ndarray,
     iou_threshold: float = 0.5,
 ) -> list[np.ndarray]:
-    """Run greedy NMS for a fixed-size batch in one CUDA mask-kernel launch.
+    """Run the original V2 batched mask kernel for one class per image.
 
     Parameters are ``boxes`` with shape ``(B, N, 4)`` and ``scores`` with
     shape ``(B, N)``.  Every item may keep a different number of boxes, so the
@@ -321,12 +327,96 @@ def run_gpu_v2_batched(
     ]
 
 
+def _run_gpu_v2_single_class(
+    boxes: np.ndarray,
+    scores: np.ndarray,
+    iou_threshold: float,
+) -> np.ndarray:
+    """Run V2's SoA packed-mask kernel for a score-sorted class partition."""
+    return _run_gpu_v2_batched_single_class(
+        boxes[np.newaxis, :, :],
+        scores[np.newaxis, :],
+        iou_threshold,
+    )[0]
+
+
+def _run_gpu_v2_single_image(
+    boxes: np.ndarray,
+    scores: np.ndarray,
+    class_ids: np.ndarray,
+    iou_threshold: float,
+) -> np.ndarray:
+    """Run class-aware V2 for one validated image."""
+    if len(boxes) == 0:
+        return np.empty(0, dtype=np.int64)
+    kept: list[np.ndarray] = []
+    for indices in stable_class_partitions(scores, class_ids):
+        local_keep = _run_gpu_v2_single_class(boxes[indices], scores[indices], iou_threshold)
+        kept.append(indices[local_keep])
+    return stable_score_order(np.concatenate(kept), scores)
+
+
+def run_gpu_v2_batched(
+    boxes: np.ndarray,
+    scores: np.ndarray,
+    class_ids=None,
+    iou_threshold: float = 0.5,
+) -> list[np.ndarray]:
+    """Class-aware V2 NMS for a fixed-size image batch.
+
+    A one-class batch preserves the original single CUDA launch.  Multi-class
+    detector candidates are partitioned per image/class, then each partition
+    uses the same coalesced SoA packed-mask kernel; the serial greedy resolver
+    remains on the host by design.
+    """
+    boxes = np.asarray(boxes)
+    scores = np.asarray(scores)
+    if boxes.ndim != 3 or boxes.shape[2] != 4:
+        raise ValueError("boxes must have shape (batch_size, n, 4)")
+    if scores.ndim != 2 or scores.shape != boxes.shape[:2]:
+        raise ValueError("scores must have shape (batch_size, n)")
+    if class_ids is None:
+        class_ids = np.zeros(scores.shape, dtype=np.int32)
+    class_ids = np.asarray(class_ids)
+    if class_ids.ndim != 2 or class_ids.shape != scores.shape:
+        raise ValueError("class_ids must have shape (batch_size, n)")
+    threshold = validate_iou_threshold(iou_threshold)
+
+    batch_size, n, _ = boxes.shape
+    if batch_size == 0:
+        return []
+    if n == 0:
+        return [np.empty(0, dtype=np.int64) for _ in range(batch_size)]
+    normalized = [
+        validate_candidates(boxes[index], scores[index], class_ids[index])
+        for index in range(batch_size)
+    ]
+    normalized_boxes = np.stack([item[0] for item in normalized])
+    normalized_scores = np.stack([item[1] for item in normalized])
+    normalized_classes = np.stack([item[2] for item in normalized])
+    if np.all(normalized_classes == normalized_classes.flat[0]):
+        return _run_gpu_v2_batched_single_class(
+            normalized_boxes,
+            normalized_scores,
+            threshold,
+        )
+    return [
+        _run_gpu_v2_single_image(image_boxes, image_scores, image_classes, threshold)
+        for image_boxes, image_scores, image_classes in zip(
+            normalized_boxes,
+            normalized_scores,
+            normalized_classes,
+        )
+    ]
+
+
 def run_gpu_v2(
     boxes: np.ndarray,
     scores: np.ndarray,
+    class_ids=None,
     iou_threshold: float = 0.5,
 ) -> np.ndarray | list[np.ndarray]:
-    """GPU V2 NMS with backward-compatible single-image and batched inputs.
+    """Class-aware GPU V2 NMS for single-image or batched candidates.
 
     ``(N, 4)`` / ``(N,)`` input returns one index array as before.  ``(B, N,
     4)`` / ``(B, N)`` input runs one batched GPU mask launch and returns a list
@@ -335,18 +425,19 @@ def run_gpu_v2(
     boxes = np.asarray(boxes)
     scores = np.asarray(scores)
     if boxes.ndim == 2:
-        is_valid_single_input = (
-            boxes.shape[1:] == (4,)
-            and scores.ndim == 1
-            and scores.shape[0] == boxes.shape[0]
+        if class_ids is None:
+            class_ids = np.zeros(len(scores), dtype=np.int32)
+        normalized_boxes, normalized_scores, normalized_classes = validate_candidates(
+            boxes, scores, class_ids
         )
-        if not is_valid_single_input:
-            raise ValueError("single-image input must be boxes (n, 4), scores (n,)")
-        return run_gpu_v2_batched(
-            boxes[np.newaxis, :, :], scores[np.newaxis, :], iou_threshold
-        )[0]
+        return _run_gpu_v2_single_image(
+            normalized_boxes,
+            normalized_scores,
+            normalized_classes,
+            validate_iou_threshold(iou_threshold),
+        )
     if boxes.ndim == 3:
-        return run_gpu_v2_batched(boxes, scores, iou_threshold)
+        return run_gpu_v2_batched(boxes, scores, class_ids, iou_threshold)
     raise ValueError("boxes must have shape (n, 4) or (batch_size, n, 4)")
 
 
@@ -369,8 +460,8 @@ def benchmark(
 ) -> dict:
     """Time CPU, GPU V1, GPU V2 side by side. Warm-up excludes JIT time."""
     _boxes, _scores = load_data(10, seed=seed)
-    _ = run_gpu_v1(_boxes, _scores, iou_threshold)
-    _ = run_gpu_v2(_boxes, _scores, iou_threshold)
+    _ = run_gpu_v1(_boxes, _scores, iou_threshold=iou_threshold)
+    _ = run_gpu_v2(_boxes, _scores, iou_threshold=iou_threshold)
 
     cols = ["N", "CPU (s)", "GPU V1 (s)", "GPU V2 (s)", "V1 Speedup", "V2 Speedup"]
     header = (
@@ -385,15 +476,15 @@ def benchmark(
         boxes, scores = load_data(n, seed=seed)
 
         t0 = time.perf_counter()
-        run_cpu(boxes, scores, iou_threshold)
+        run_cpu(boxes, scores, iou_threshold=iou_threshold)
         cpu_t = time.perf_counter() - t0
 
         t0 = time.perf_counter()
-        run_gpu_v1(boxes, scores, iou_threshold)
+        run_gpu_v1(boxes, scores, iou_threshold=iou_threshold)
         v1_t = time.perf_counter() - t0
 
         t0 = time.perf_counter()
-        run_gpu_v2(boxes, scores, iou_threshold)
+        run_gpu_v2(boxes, scores, iou_threshold=iou_threshold)
         v2_t = time.perf_counter() - t0
 
         v1_sp = cpu_t / v1_t
@@ -424,7 +515,7 @@ def benchmark_batched(
     the V2 batch optimization.
     """
     warmup_boxes, warmup_scores = _synthetic_batch(batch_size, 10, seed)
-    _ = run_gpu_v2(warmup_boxes, warmup_scores, iou_threshold)
+    _ = run_gpu_v2(warmup_boxes, warmup_scores, iou_threshold=iou_threshold)
 
     header = (
         f"{'N/image':>10} | {'Batch':>5} | {'CPU greedy (s)':>14} | "
@@ -438,11 +529,11 @@ def benchmark_batched(
 
         t0 = time.perf_counter()
         for image_idx in range(batch_size):
-            run_cpu(boxes[image_idx], scores[image_idx], iou_threshold)
+            run_cpu(boxes[image_idx], scores[image_idx], iou_threshold=iou_threshold)
         cpu_t = time.perf_counter() - t0
 
         t0 = time.perf_counter()
-        run_gpu_v2(boxes, scores, iou_threshold)
+        run_gpu_v2(boxes, scores, iou_threshold=iou_threshold)
         gpu_t = time.perf_counter() - t0
 
         speedup = cpu_t / gpu_t
@@ -506,13 +597,15 @@ def main() -> None:
     print(f"Generated {image_count} image(s) × {args.n} synthetic boxes.")
     print("Warming up GPU (JIT compile)...")
     if args.batch_size == 1:
-        _ = run_gpu_v2(boxes[:16], scores[:16], args.iou_threshold)
+        _ = run_gpu_v2(boxes[:16], scores[:16], iou_threshold=args.iou_threshold)
     else:
         warmup_n = min(16, args.n)
-        _ = run_gpu_v2(boxes[:, :warmup_n], scores[:, :warmup_n], args.iou_threshold)
+        _ = run_gpu_v2(
+            boxes[:, :warmup_n], scores[:, :warmup_n], iou_threshold=args.iou_threshold
+        )
 
     t0 = time.perf_counter()
-    keep = run_gpu_v2(boxes, scores, args.iou_threshold)
+    keep = run_gpu_v2(boxes, scores, iou_threshold=args.iou_threshold)
     elapsed = time.perf_counter() - t0
     if args.batch_size == 1:
         print(f"GPU V2 NMS: kept {len(keep)}/{len(boxes)} boxes in {elapsed:.4f}s")
@@ -534,10 +627,10 @@ def main() -> None:
             zip(boxes_to_check, scores_to_check, keeps_to_check)
         ):
             cpu_keep = set(
-                run_cpu(image_boxes, image_scores, args.iou_threshold).tolist()
+                run_cpu(image_boxes, image_scores, iou_threshold=args.iou_threshold).tolist()
             )
             v1_keep = set(
-                run_gpu_v1(image_boxes, image_scores, args.iou_threshold).tolist()
+                run_gpu_v1(image_boxes, image_scores, iou_threshold=args.iou_threshold).tolist()
             )
             v2_keep = set(v2_keep.tolist())
             all_cpu_match &= cpu_keep == v2_keep
