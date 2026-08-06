@@ -54,26 +54,23 @@ def environment() -> dict:
 
 def select_runner(version: str):
     if version == "cpu":
-        return run_cpu, True
+        return run_cpu
     if version == "v1":
         from gpu_v1 import run_gpu_v1
-        return run_gpu_v1, True
+        return run_gpu_v1
     if version == "v2":
         from gpu_v2 import run_gpu_v2
-        return run_gpu_v2, True
+        return run_gpu_v2
     if version == "v3":
         from gpu_v3 import run_gpu_v3_matrix_nms
 
-        return (lambda boxes, scores, class_ids: run_gpu_v3_matrix_nms(boxes, scores)), False
+        return lambda boxes, scores, class_ids: run_gpu_v3_matrix_nms(boxes, scores)
     raise ValueError(version)
 
 
-def timed_run(runner, uses_class_ids: bool, boxes, scores, class_ids) -> float:
+def timed_run(runner, boxes, scores, class_ids) -> float:
     start = time.perf_counter()
-    if uses_class_ids:
-        runner(boxes, scores, class_ids)
-    else:
-        runner(boxes, scores, class_ids)
+    runner(boxes, scores, class_ids)
     return time.perf_counter() - start
 
 
@@ -125,11 +122,11 @@ def build_synthetic_report(
         boxes, scores, class_ids = load_synthetic_candidates(candidate_count, seed=seed)
         report["results"][str(candidate_count)] = {}
         for version in versions:
-            runner, uses_class_ids = select_runner(version)
+            runner = select_runner(version)
             for _ in range(warmup):
-                timed_run(runner, uses_class_ids, boxes, scores, class_ids)
+                timed_run(runner, boxes, scores, class_ids)
             samples = [
-                timed_run(runner, uses_class_ids, boxes, scores, class_ids)
+                timed_run(runner, boxes, scores, class_ids)
                 for _ in range(repeats)
             ]
             report["results"][str(candidate_count)][version] = summarize(samples)

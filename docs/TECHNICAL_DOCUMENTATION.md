@@ -109,8 +109,12 @@ Kết quả cuối cùng: mỗi con mèo chỉ còn đúng một vòng tròn —
 #### `load_data(n, seed=0)` — dòng 20-33
 Sinh dữ liệu giả lập: `n` box ngẫu nhiên dạng `[x1, y1, x2, y2]` (góc trên-trái, góc dưới-phải), toạ độ `x1, y1` trong khoảng `[0, 900]`, chiều rộng/cao `w, h` trong `[10, 100]`, và `n` điểm số (`scores`) ngẫu nhiên trong `[0, 1)`. Dùng `np.random.default_rng(seed)` nên **cùng seed → cùng dữ liệu**, giúp so sánh CPU/GPU công bằng.
 
-#### `load_real_boxes(image_paths=None, conf_threshold=0.25)` — dòng 36-50
-Thay vì dữ liệu giả, hàm này tải mô hình **YOLOv5s** đã huấn luyện sẵn qua `torch.hub.load`, chạy trên ảnh thật (mặc định là ảnh mẫu `zidane.jpg` của Ultralytics) để lấy box/score thực tế từ một detector thật.
+#### `load_raw_yolo_candidates(image, conf_threshold=0.01)`
+Thay vì dữ liệu giả, adapter này tải checkpoint **YOLOv5s** qua code YOLOv5
+tương ứng của `torch.hub`, chạy trực tiếp network tensor (không AutoShape) và
+decode output raw `xywh + objectness + class probabilities` thành
+`boxes, scores, class_ids`. Vì vậy NMS của project nhận candidate **trước NMS**
+và có thể xử lý từng class độc lập.
 
 #### `iou_one_to_many(box, boxes)` — dòng 53-68
 Tính IoU giữa **một** box và **một mảng** M box khác, hoàn toàn bằng phép toán mảng NumPy (vector hoá — không có vòng lặp Python). Công thức:

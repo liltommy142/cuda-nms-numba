@@ -47,7 +47,7 @@ Thumbs.db
 *.swp
 
 # Local Codex / slide-inspection working files. Final PPTX/PDF and evidence
-# live under presentation/seminar_2/submission/final/ and remain trackable.
+# live under presentation/seminar_2/ and remain trackable.
 .codex_tmp/
 *.pptx.inspect.ndjson
 presentation/seminar_2/submission/*.zip

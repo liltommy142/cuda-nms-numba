@@ -8,7 +8,6 @@
 |---|---|
 | Mới vào repo, muốn hiểu tổng quan dự án là gì | [`../README.md`](../README.md) (giới thiệu ngắn) → [TECHNICAL_DOCUMENTATION §1](TECHNICAL_DOCUMENTATION.md#phần-1--phân-tích-dự-án) (phân tích đầy đủ) |
 | Muốn tự chạy code/test trên máy mình (không cần AI hỗ trợ) | [`HOW_TO_RUN.md`](HOW_TO_RUN.md) |
-| Muốn xem chỉ các kết quả đã chạy/xác minh được | [`VERIFIED_STATUS.md`](VERIFIED_STATUS.md) |
 | Có CUDA GPU và muốn xác minh V1/V2/V3 đúng quy trình | [`GPU_VALIDATION_RUNBOOK.md`](GPU_VALIDATION_RUNBOOK.md) |
 | Không rành CUDA/GPU, muốn hiểu khái niệm trước khi đọc code | [TECHNICAL_DOCUMENTATION §2](TECHNICAL_DOCUMENTATION.md#phần-2--giải-thích-kỹ-thuật-dành-cho-người-mới) (giải thích từ số 0) → [`GLOSSARY.md`](GLOSSARY.md) (tra thuật ngữ nhanh) |
 | Muốn đọc kỹ từng hàm/kernel trong `src/*.py` | [TECHNICAL_DOCUMENTATION §2](TECHNICAL_DOCUMENTATION.md#phần-2--giải-thích-kỹ-thuật-dành-cho-người-mới) — có mục riêng cho từng file: [`cpu_baseline.py`](TECHNICAL_DOCUMENTATION.md#22-cpu_baselinepy--giải-thích-từng-hàm), [`gpu_v1.py`](TECHNICAL_DOCUMENTATION.md#23-gpu_v1py--giải-thích-từng-hàm-và-cuda-kernel), [`gpu_v2.py`](TECHNICAL_DOCUMENTATION.md#25-gpu_v2py--giải-thích-từng-hàm-và-cuda-kernel), [`gpu_v3.py`](TECHNICAL_DOCUMENTATION.md#26-gpu_v3py--giải-thích-từng-hàm-và-cuda-kernel) |
@@ -34,7 +33,7 @@ cuda-nms-numba/
 │   ├── seminar_1/                   → proposal đã nộp
 │   └── seminar_2/                   → deck, outline, script, Q&A và evidence Seminar 2
 ├── src/*.py + src/*.ipynb           → code thật (giải thích chi tiết ở TECHNICAL_DOCUMENTATION §2)
-└── tests/test_correctness.py        → đối chiếu CPU ↔ GPU V1 ↔ GPU V2 ↔ torchvision
+└── tests/                           → correctness + benchmark metadata contracts
 ```
 
 ## Nguyên tắc liên kết trong "vault" này

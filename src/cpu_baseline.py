@@ -163,16 +163,6 @@ def load_raw_yolo_candidates(
     return validate_candidates(boxes, scores, class_ids)
 
 
-def load_real_boxes(image_paths=None, conf_threshold=0.01):
-    """Compatibility wrapper returning raw YOLO boxes/scores for one image."""
-    if image_paths is None:
-        image_paths = ["https://ultralytics.com/images/zidane.jpg"]
-    if len(image_paths) != 1:
-        raise ValueError("use load_raw_yolo_candidates once per image")
-    boxes, scores, _ = load_raw_yolo_candidates(image_paths[0], conf_threshold)
-    return boxes, scores
-
-
 def iou_one_to_many(box, boxes):
     """IoU between a single box (4,) and an array of boxes (M, 4)."""
     xx1 = np.maximum(box[0], boxes[:, 0])

@@ -8,19 +8,17 @@ and benchmark artifacts are now recorded under `evidence/`.
 1. [Code explanation](CODE_EXPLANATION_VI.md) — understand the current implementation.
 2. [Colab manual test](COLAB_MANUAL_TEST.md) — correctness before performance.
 3. [Submission checklist](SUBMISSION_CHECKLIST.md) — complete the evidence gate first.
-4. [Slide update plan](SLIDE_UPDATE_PLAN.md) — update claims only after evidence exists.
-5. [Submission list](submission/list.md) — final hand-in and GitHub check.
-6. [Slide outline](OUTLINE_AND_CONTENT.md) — audience-facing content.
-7. [Speaker script](SCRIPT.md) — rehearsal sequence and transitions.
-8. [Q&A preparation](QA_PREP.md) — technical defence of design choices.
-9. [Cross-group lessons](CROSS_GROUP_LESSONS.md) — likely feedback and pitfalls.
-10. [Evidence folder](evidence/README.md) — where test logs and benchmark JSON belong.
+4. [Slide outline](OUTLINE_AND_CONTENT.md) — audience-facing content.
+5. [Speaker script](SCRIPT.md) — rehearsal sequence and transitions.
+6. [Q&A preparation](QA_PREP.md) — technical defence of design choices.
+7. [Cross-group lessons](CROSS_GROUP_LESSONS.md) — likely feedback and pitfalls.
+8. [Evidence folder](evidence/README.md) — where test logs and benchmark JSON belong.
 
 ## Current verified state (after baseline/V1/V2 restructure)
 
 | Item | Status | What may be claimed now |
 |---|---|---|
-| Local CPU/reference suite | 25 passed, 41 CUDA-skipped | CPU baseline, raw YOLOv5 adapter, report metadata and non-GPU V1/V2 wrappers verified |
+| Local CPU/reference suite | 26 passed, 41 CUDA-skipped | CPU baseline, raw YOLOv5 adapter, report metadata and non-GPU V1/V2 wrappers verified |
 | CPU baseline | class-aware hard NMS + raw YOLOv5 pre-NMS adapter | synthetic N=100/1k/10k and real detector path are separate |
 | GPU V1 / V2 | class-aware hard-NMS code + T4 parity tests added | requires rerun on the current commit before quoting a GPU number |
 | GPU V3 | untouched Matrix NMS code/evidence | do not present it as hard-NMS parity |
@@ -46,10 +44,7 @@ Python 3.12.13, NumPy 2.0.2 and Numba 0.60.0.
 
 - [Final Seminar 2 deck — PPTX](Seminar_2_Final_T4.pptx)
 - [Final Seminar 2 deck — PDF](Seminar_2_Final_T4.pdf)
-- [Original working deck](Seminar_2_CUDA_NMS_Numba.pptx)
 - [Local CPU profile](cprofile_N10000_local.txt)
-- [Legacy preparation notes](LEGACY_STATUS_NOTES.md) — retained for history;
-  verify every claim against this README and the evidence folder before reuse.
 
 The automated B=32 correctness test uses N=50 to cover the partially filled
 final 64-thread block. The separate latency benchmark uses B=32 and N=10,000.
