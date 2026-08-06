@@ -7,7 +7,7 @@ for V1 and V2.
 ## Scope
 
 - Replace the old `src/gpu_v1.ipynb` and `src/gpu_v2.ipynb` notebooks.
-- Create `colab/v1_gpu_colab.ipynb` and `colab/v2_gpu_colab.ipynb`.
+- Create `collab/v1_gpu_colab.ipynb` and `collab/v2_gpu_colab.ipynb`.
 - Update the Colab links and instructions in `docs/HOW_TO_RUN.md`.
 - Keep Baseline as the CPU/reference path invoked by both notebooks.
 - Do not modify V3 source code or its notebook.
