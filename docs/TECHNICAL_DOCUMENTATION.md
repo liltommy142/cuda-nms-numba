@@ -16,7 +16,8 @@ historical pre-restructure evidence only.
 
 ## 2. Candidate contract
 
-`src/nms_common.py` is the shared source of truth:
+`src/common/candidates.py` is the shared source of truth. `src/nms_common.py`
+is retained only as a compatibility façade for existing imports.
 
 ```text
 boxes     float32 (N, 4), xyxy with x2 > x1 and y2 > y1
@@ -37,9 +38,9 @@ stable global order.
 
 | Module | Role | Main limitation |
 |---|---|---|
-| `cpu_baseline.py` | Serial, class-aware greedy hard NMS; canonical baseline | O(N²) pairwise work |
-| `gpu_v1.py` | One CUDA thread per IoU pair; downloads full N×N matrix; CPU resolves greedy decisions | O(N²) device memory/transfer |
-| `gpu_v2.py` | SoA coordinates and packed `uint64` suppression masks; CPU resolves greedy decisions | Greedy dependency still remains on host |
+| `baseline/{core,yolov5_adapter,cli}.py` (`cpu_baseline.py` façade) | Serial, class-aware greedy hard NMS; raw detector adapter; canonical baseline | O(N²) pairwise work |
+| `v1/{kernel,core,cli}.py` (`gpu_v1.py` façade) | One CUDA thread per IoU pair; downloads full N×N matrix; CPU resolves greedy decisions | O(N²) device memory/transfer |
+| `v2/{kernels,core,cli}.py` (`gpu_v2.py` façade) | SoA coordinates and packed `uint64` suppression masks; CPU resolves greedy decisions | Greedy dependency still remains on host |
 | `gpu_v3.py` | Matrix NMS / soft score decay | Different semantics from hard NMS; intentionally untouched |
 
 ### CPU baseline and raw detector
