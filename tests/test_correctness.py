@@ -209,17 +209,17 @@ def test_gpu_v1_wrapper_partitions_classes_without_cuda(monkeypatch):
 
 
 def test_gpu_v2_wrapper_partitions_batched_classes_without_cuda(monkeypatch):
-    import gpu_v2
+    from v2 import core
 
     def keep_every_rank(class_boxes, class_scores, iou_threshold):
         return np.arange(len(class_boxes), dtype=np.int64)
 
-    monkeypatch.setattr(gpu_v2, "_run_gpu_v2_single_class", keep_every_rank)
+    monkeypatch.setattr(core, "_run_single_class", keep_every_rank)
     boxes, _, _ = load_synthetic_candidates(4, seed=6)
     scores = np.array([0.5, 0.9, 0.7, 0.8], dtype=np.float32)
     class_ids = np.array([0, 1, 0, 1], dtype=np.int32)
-    single = gpu_v2.run_gpu_v2(boxes, scores, class_ids)
-    batched = gpu_v2.run_gpu_v2(
+    single = core.run_gpu_v2(boxes, scores, class_ids)
+    batched = core.run_gpu_v2(
         np.stack([boxes, boxes]),
         np.stack([scores, scores]),
         np.stack([class_ids, class_ids]),
