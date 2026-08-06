@@ -16,7 +16,7 @@ and benchmark artifacts are now recorded under `evidence/`.
 
 | Item | Status | What may be claimed now |
 |---|---|---|
-| Local CPU/reference suite | 26 passed, 41 CUDA-skipped | CPU baseline, raw YOLOv5 adapter, report metadata and non-GPU V1/V2 wrappers verified |
+| Local CPU/reference suite | 30 passed, 41 CUDA-skipped | CPU baseline, raw YOLOv5 adapter, report metadata and non-GPU V1/V2 wrappers verified |
 | CPU baseline | class-aware hard NMS + raw YOLOv5 pre-NMS adapter | synthetic N=100/1k/10k and real detector path are separate |
 | GPU V1 / V2 | class-aware hard-NMS code + T4 parity tests added | requires rerun on the current commit before quoting a GPU number |
 | GPU V3 | untouched Matrix NMS code/evidence | do not present it as hard-NMS parity |

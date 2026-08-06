@@ -9,7 +9,7 @@ object detector. The repository has two deliberately separate experiments:
 - **Real detector integration**: raw YOLOv5 candidates, then this project's
   class-aware hard NMS.
 
-The current local verification is **26 passed, 41 CUDA-skipped**. V1/V2 CUDA
+The current local verification is **30 passed, 41 CUDA-skipped**. V1/V2 CUDA
 parity and all new performance numbers must be rerun on a CUDA runtime before
 they are cited. Existing files under `presentation/seminar_2/evidence/` are
 historical pre-restructure evidence only.

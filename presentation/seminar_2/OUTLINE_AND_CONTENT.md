@@ -57,7 +57,7 @@ NMS. So với Matrix-NMS reference, không claim torchvision parity.
 
 ## Slide 11 — Trạng thái hiện tại
 
-Local suite: 26 passed, CUDA tests skipped trên Mac. V1/V2 class-aware và T4
+Local suite: 30 passed, CUDA tests skipped trên Mac. V1/V2 class-aware và T4
 parity tests đã sẵn sàng; rerun CUDA là evidence gate trước số speedup mới.
 
 ## Slide 12 — Kết luận

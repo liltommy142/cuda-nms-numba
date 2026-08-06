@@ -18,7 +18,7 @@ python -m pytest tests -q
 ## Result
 
 - Source/benchmark compilation: passed.
-- Result: **26 passed, 41 skipped, 0 failed**.
+- Result: **30 passed, 41 skipped, 0 failed**.
 - Every GPU test was skipped because CUDA/Numba is unavailable locally.
 
 This record proves only host-side import, syntax and CPU/reference-oracle
