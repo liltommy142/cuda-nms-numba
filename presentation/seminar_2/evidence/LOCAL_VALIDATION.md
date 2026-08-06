@@ -1,6 +1,6 @@
 # Local validation record
 
-Date: 2026-07-31
+Date: 2026-08-06
 
 ## Environment
 
@@ -11,15 +11,14 @@ Date: 2026-07-31
 ## Commands run
 
 ```bash
-python3 -m py_compile src/gpu_v2.py tests/test_correctness.py
-python3 -m pytest tests -v
+python -m compileall -q src benchmarks
+python -m pytest tests -q
 ```
 
 ## Result
 
-- Python syntax check: passed.
-- Test collection: 49 tests.
-- Result: **9 passed, 40 skipped, 0 failed**.
+- Source/benchmark compilation: passed.
+- Result: **26 passed, 41 skipped, 0 failed**.
 - Every GPU test was skipped because CUDA/Numba is unavailable locally.
 
 This record proves only host-side import, syntax and CPU/reference-oracle

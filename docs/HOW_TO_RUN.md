@@ -75,8 +75,8 @@ python benchmarks/run_v2_batch.py --batch-size 32 --n 10000 \
 ```
 
 Đây là end-to-end latency (host sort, transfer, GPU kernel, copy mask về và
-CPU greedy resolution). Evidence T4 hiện có là 1.002 s/batch, nên không được
-tuyên bố đạt mục tiêu catalog `<5 ms`/batch.
+CPU greedy resolution). Hãy tạo evidence mới trên đúng commit trước khi tuyên
+bố đạt hay không đạt mục tiêu catalog `<5 ms`/batch.
 
 ## 3. Chạy detector thật với raw candidate trước NMS
 

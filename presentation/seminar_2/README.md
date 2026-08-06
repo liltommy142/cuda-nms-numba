@@ -6,13 +6,11 @@ and benchmark artifacts are now recorded under `evidence/`.
 ## Read in this order
 
 1. [Code explanation](CODE_EXPLANATION_VI.md) — understand the current implementation.
-2. [Colab manual test](COLAB_MANUAL_TEST.md) — correctness before performance.
-3. [Submission checklist](SUBMISSION_CHECKLIST.md) — complete the evidence gate first.
-4. [Slide outline](OUTLINE_AND_CONTENT.md) — audience-facing content.
-5. [Speaker script](SCRIPT.md) — rehearsal sequence and transitions.
-6. [Q&A preparation](QA_PREP.md) — technical defence of design choices.
-7. [Cross-group lessons](CROSS_GROUP_LESSONS.md) — likely feedback and pitfalls.
-8. [Evidence folder](evidence/README.md) — where test logs and benchmark JSON belong.
+2. [Slide outline](OUTLINE_AND_CONTENT.md) — audience-facing content.
+3. [Speaker script](SCRIPT.md) — rehearsal sequence and transitions.
+4. [Q&A preparation](QA_PREP.md) — technical defence of design choices.
+5. [Submission checklist](SUBMISSION_CHECKLIST.md) — evidence gate before hand-in.
+6. [Evidence folder](evidence/README.md) — where test logs and benchmark JSON belong.
 
 ## Current verified state (after baseline/V1/V2 restructure)
 
@@ -25,11 +23,10 @@ and benchmark artifacts are now recorded under `evidence/`.
 
 ### Historical T4 values — do not use as post-restructure results
 
-The values in the old evidence files (V1 `226.107 ms`, V2 `31.599 ms`, V3
-`4.092 ms` at N=10,000; V2 batch-32 `1.002 s`) were produced **before** the
-class-aware rebuild. Keep them only as historical context. Rerun the current
-commit in Colab/T4 to generate `*_restructured_t4.*` before putting any new
-performance claim on the deck.
+The old evidence files were produced **before** the class-aware rebuild. Keep
+them only as historical context. Rerun the current commit in Colab/T4 to
+generate `*_restructured_t4.*` before putting any new performance claim on the
+deck.
 
 V1/V2 are class-aware hard greedy NMS and must be compared with the per-class
 CPU/torchvision reference. V3 is Matrix NMS, so it must be compared with

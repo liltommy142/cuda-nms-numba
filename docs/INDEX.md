@@ -8,15 +8,14 @@
 |---|---|
 | Mới vào repo, muốn hiểu tổng quan dự án là gì | [`../README.md`](../README.md) (giới thiệu ngắn) → [TECHNICAL_DOCUMENTATION §1](TECHNICAL_DOCUMENTATION.md#phần-1--phân-tích-dự-án) (phân tích đầy đủ) |
 | Muốn tự chạy code/test trên máy mình (không cần AI hỗ trợ) | [`HOW_TO_RUN.md`](HOW_TO_RUN.md) |
-| Có CUDA GPU và muốn xác minh V1/V2/V3 đúng quy trình | [`GPU_VALIDATION_RUNBOOK.md`](GPU_VALIDATION_RUNBOOK.md) |
+| Có CUDA GPU và muốn xác minh đúng quy trình | [mục Colab trong `HOW_TO_RUN.md`](HOW_TO_RUN.md#1-chạy-trên-google-colab-có-gpu-t4-thật) |
 | Không rành CUDA/GPU, muốn hiểu khái niệm trước khi đọc code | [TECHNICAL_DOCUMENTATION §2](TECHNICAL_DOCUMENTATION.md#phần-2--giải-thích-kỹ-thuật-dành-cho-người-mới) (giải thích từ số 0) → [`GLOSSARY.md`](GLOSSARY.md) (tra thuật ngữ nhanh) |
-| Muốn đọc kỹ từng hàm/kernel trong `src/*.py` | [TECHNICAL_DOCUMENTATION §2](TECHNICAL_DOCUMENTATION.md#phần-2--giải-thích-kỹ-thuật-dành-cho-người-mới) — có mục riêng cho từng file: [`cpu_baseline.py`](TECHNICAL_DOCUMENTATION.md#22-cpu_baselinepy--giải-thích-từng-hàm), [`gpu_v1.py`](TECHNICAL_DOCUMENTATION.md#23-gpu_v1py--giải-thích-từng-hàm-và-cuda-kernel), [`gpu_v2.py`](TECHNICAL_DOCUMENTATION.md#25-gpu_v2py--giải-thích-từng-hàm-và-cuda-kernel), [`gpu_v3.py`](TECHNICAL_DOCUMENTATION.md#26-gpu_v3py--giải-thích-từng-hàm-và-cuda-kernel) |
+| Muốn đọc kỹ từng module/kernel | [`TECHNICAL_DOCUMENTATION.md`](TECHNICAL_DOCUMENTATION.md) — contract chung, CPU, V1, V2, V3 và benchmark semantics |
 | Muốn xem sơ đồ luồng dữ liệu / độ phức tạp Big-O / các bottleneck đã biết | [TECHNICAL_DOCUMENTATION §3](TECHNICAL_DOCUMENTATION.md#phần-3--tài-liệu-kỹ-thuật-chi-tiết) |
 | Tra 1 thuật ngữ cụ thể (IoU, warp, bitmask, decay factor...) | [`GLOSSARY.md`](GLOSSARY.md) |
 | Đang chuẩn bị buổi thuyết trình seminar | [`../presentation/README.md`](../presentation/README.md) (điểm bắt đầu của bộ tài liệu thuyết trình) |
 | Muốn biết số liệu nào là thật, số nào còn chờ CUDA | [`../presentation/seminar_2/README.md`](../presentation/seminar_2/README.md) |
 | Chuẩn bị trả lời Q&A / lo bị hỏi khó | [`../presentation/seminar_2/QA_PREP.md`](../presentation/seminar_2/QA_PREP.md) |
-| Muốn biết lớp/giảng viên hay hỏi kiểu gì (từ feedback nhóm khác) | [`../presentation/seminar_2/CROSS_GROUP_LESSONS.md`](../presentation/seminar_2/CROSS_GROUP_LESSONS.md) |
 
 ## Bản đồ toàn bộ tài liệu
 

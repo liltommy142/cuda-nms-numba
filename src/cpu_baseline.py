@@ -271,14 +271,13 @@ def main():
         help="candidate source; yolo-live supplies raw pre-NMS model outputs",
     )
     parser.add_argument("--image", help="local path or URL for --source yolo-live")
-    parser.add_argument("--real-boxes", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--conf-threshold", type=float, default=0.01, help="minimum objectness × class probability for yolo-live")
     parser.add_argument("--verify", action="store_true", help="compare against torchvision.ops.nms")
     parser.add_argument("--benchmark", action="store_true", help="sweep N in {100, 1000, 10000}")
     args = parser.parse_args()
 
     if args.benchmark:
-        if args.source != "synthetic" or args.real_boxes:
+        if args.source != "synthetic":
             parser.error("--benchmark is only defined for --source synthetic")
         benchmark(
             iou_threshold=args.iou_threshold,
@@ -287,8 +286,6 @@ def main():
         )
         return
 
-    if args.real_boxes:
-        args.source = "yolo-live"
     if args.source == "yolo-live":
         if not args.image:
             parser.error("--source yolo-live requires --image")
