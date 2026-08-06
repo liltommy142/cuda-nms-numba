@@ -50,17 +50,19 @@ trong tolerance `1e-4`. Tie-break dùng stable descending score order.
 - Detector + NMS: raw candidate extraction và NMS được đo tách.
 - Không gọi số NMS-only là latency inference end-to-end.
 
-## Slide 10 — V3 Matrix NMS
+## Slide 10 — Evidence gate cho batch benchmark
 
-V3 soft-decay score để bỏ dependency greedy, nhưng không cùng semantics hard
-NMS. So với Matrix-NMS reference, không claim torchvision parity.
+Protocol batch là `B=32, N=10.000`, nhưng local Mac không có NVIDIA CUDA.
+Deck chỉ báo `30 passed, 41 CUDA-skipped`; correctness parity và timing CUDA
+phải được rerun từ chính commit sẽ trình bày trước khi công bố speedup.
 
-## Slide 11 — Trạng thái hiện tại
+## Slide 11 — Giới hạn hiện tại
 
-Local suite: 30 passed, CUDA tests skipped trên Mac. V1/V2 class-aware và T4
-parity tests đã sẵn sàng; rerun CUDA là evidence gate trước số speedup mới.
+V1 trả dense relation GPU → CPU; V2 nén relation thành `uint64` bitmask nhưng
+greedy resolver cuối vẫn ở CPU. Đây là giới hạn còn lại của hard NMS hiện tại.
 
 ## Slide 12 — Kết luận
 
-V1 minh họa pairwise parallelism; V2 giảm traffic/memory; hard greedy decision
-vẫn là giới hạn. V3 là trade-off thuật toán, không phải drop-in hard NMS.
+Seminar chỉ trình bày Baseline, V1 và V2. V1 minh họa pairwise parallelism;
+V2 giảm traffic/memory; hard greedy decision vẫn là giới hạn. Các hướng NMS
+khác nằm ngoài scope buổi này.

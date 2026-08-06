@@ -24,4 +24,4 @@ python -m pytest tests -q
 This record proves only host-side import, syntax and CPU/reference-oracle
 coverage. It is not GPU correctness or performance evidence. Follow
 [`../SUBMISSION_CHECKLIST.md`](../SUBMISSION_CHECKLIST.md) on a CUDA machine
-before presenting V2/V3 results.
+before presenting V1/V2 CUDA results.

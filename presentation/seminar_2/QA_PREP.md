@@ -44,10 +44,10 @@ cao hơn trước, nên vẫn chạy serial trên CPU.
 Là 32 ảnh độc lập. Nó khác word 64 box trong bitmask. Batch đa class phải giữ
 đúng semantics bằng partition theo class.
 
-## Vì sao V3 không so với torchvision NMS?
+## Seminar 2 có trình bày biến thể NMS khác không?
 
-V3 là Matrix NMS/soft-decay, giảm score thay vì hard suppress. So output index
-với greedy NMS là sai câu hỏi; dùng `matrix_nms_reference()` thay thế.
+Không. Phạm vi buổi này là CPU Baseline, V1 và V2 của class-aware greedy hard
+NMS; tập trung giải thích đúng-đắn, parallel pairwise IoU và packed bitmask.
 
 ## Vì sao benchmark synthetic và detector tách nhau?
 

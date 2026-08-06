@@ -5,6 +5,6 @@
 - [ ] Lưu log pytest và JSON benchmark theo đúng commit đang trình bày.
 - [ ] Ghi rõ scope: `nms_only_synthetic` hoặc `detector_plus_nms_real`.
 - [ ] Không dùng historical T4 evidence như số performance post-restructure.
-- [ ] Deck/PDF dùng cùng một narrative: V1/V2 hard NMS, V3 Matrix NMS.
+- [ ] Deck/PDF dùng cùng một narrative: Baseline/V1/V2 class-aware hard NMS.
 - [ ] Kiểm tra final deck/PDF trong thư mục này mở được.
 - [ ] Push commit cuối trước khi nộp.

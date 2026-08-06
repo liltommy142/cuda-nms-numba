@@ -29,13 +29,15 @@ của greedy NMS chưa biến mất.”
 candidate extraction cộng NMS để chứng minh integration. Không lấy số NMS-only
 để gọi là inference end-to-end.”
 
-## V3 và giới hạn
+## Evidence gate và giới hạn
 
-“V3 Matrix NMS dùng soft score decay nên nhanh theo hướng khác nhưng không có
-semantics hard-NMS giống V1/V2. Vì vậy V3 có oracle riêng.”
+“Trên máy local hiện tại, suite có 30 test pass và 41 test CUDA bị skip vì
+không có NVIDIA CUDA. Vì vậy nhóm không công bố số GPU cho commit mới trước
+khi rerun parity và benchmark. V1 còn copy dense matrix về CPU; V2 giảm phần
+đó bằng bitmask nhưng quyết định greedy cuối vẫn ở CPU.”
 
 ## Kết
 
-“Local correctness đã pass; GPU numbers chỉ được công bố lại sau CUDA rerun
-trên đúng commit. Điểm chính là nhìn rõ trade-off: V1 dễ hiểu, V2 giảm traffic,
-và greedy dependency là giới hạn thuật toán còn lại.”
+“Seminar này chốt ở Baseline, V1 và V2. Local correctness đã pass; GPU numbers
+chỉ được công bố sau CUDA rerun trên đúng commit. Điểm chính là trade-off: V1
+dễ hiểu, V2 giảm traffic, và greedy dependency là giới hạn còn lại.”

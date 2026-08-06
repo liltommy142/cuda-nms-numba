@@ -31,16 +31,9 @@ CPU vẫn resolve greedy mask theo score rank; đây là giới hạn còn lại
 NMS. Batch một class giữ fused launch; batch đa class partition theo class rồi
 dùng lại cùng kernel.
 
-## V3 — Matrix NMS
-
-V3 đổi thuật toán sang soft score decay nên không trả output tương đương hard
-NMS. Oracle của V3 là `matrix_nms_reference()`, không phải torchvision NMS.
-V3 nằm ngoài phạm vi tái cấu trúc này và không bị sửa.
-
 ## Kiểm thử và số liệu
 
 - CPU/V1/V2: compare với per-class torchvision hard NMS.
-- V3: compare với Matrix-NMS CPU reference.
 - Synthetic benchmark và detector-plus-NMS report là hai scope khác nhau.
 - T4 evidence hiện có là trước tái cấu trúc; chỉ dùng số mới sau khi rerun
-  current commit trên CUDA.
+  current commit trên CUDA. Seminar 2 chỉ giải thích Baseline, V1 và V2.
