@@ -16,18 +16,25 @@ and benchmark artifacts are now recorded under `evidence/`.
 9. [Cross-group lessons](CROSS_GROUP_LESSONS.md) — likely feedback and pitfalls.
 10. [Evidence folder](evidence/README.md) — where test logs and benchmark JSON belong.
 
-## Current verified state
+## Current verified state (after baseline/V1/V2 restructure)
 
 | Item | Status | What may be claimed now |
 |---|---|---|
-| CPU / V1 / V2 / V3 | 50/50 CUDA tests passed on Tesla T4 | Correctness verified for test coverage |
-| GPU V1 | `226.107 ms` at N=10,000 | `5.0×` CPU, single-image |
-| GPU V2 | `31.599 ms` at N=10,000 | `35.6×` CPU, single-image |
-| GPU V3 | `4.092 ms` at N=10,000 | Matrix-NMS trade-off, single-image |
-| GPU V2 batch 32 | `1.002 s/batch` at 32 × 10,000 | Functionally verified; does **not** meet `<5 ms/batch` |
+| Local CPU/reference suite | 25 passed, 41 CUDA-skipped | CPU baseline, raw YOLOv5 adapter, report metadata and non-GPU V1/V2 wrappers verified |
+| CPU baseline | class-aware hard NMS + raw YOLOv5 pre-NMS adapter | synthetic N=100/1k/10k and real detector path are separate |
+| GPU V1 / V2 | class-aware hard-NMS code + T4 parity tests added | requires rerun on the current commit before quoting a GPU number |
+| GPU V3 | untouched Matrix NMS code/evidence | do not present it as hard-NMS parity |
 
-V1/V2 are hard greedy NMS and must be compared with the CPU/torchvision
-reference. V3 is Matrix NMS, so it must be compared with
+### Historical T4 values — do not use as post-restructure results
+
+The values in the old evidence files (V1 `226.107 ms`, V2 `31.599 ms`, V3
+`4.092 ms` at N=10,000; V2 batch-32 `1.002 s`) were produced **before** the
+class-aware rebuild. Keep them only as historical context. Rerun the current
+commit in Colab/T4 to generate `*_restructured_t4.*` before putting any new
+performance claim on the deck.
+
+V1/V2 are class-aware hard greedy NMS and must be compared with the per-class
+CPU/torchvision reference. V3 is Matrix NMS, so it must be compared with
 `matrix_nms_reference`, not claimed to match greedy NMS.
 
 Evidence: [`pytest_t4_final.txt`](evidence/pytest_t4_final.txt),

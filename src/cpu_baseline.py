@@ -88,11 +88,45 @@ def _open_rgb_image(image):
     return Image.open(image_text).convert("RGB")
 
 
+def load_raw_yolov5_model(weights: str | Path | None = None):
+    """Load legacy YOLOv5 weights through the matching YOLOv5 hub code.
+
+    The repository checkpoint is not forward-compatible with Ultralytics'
+    current YOLOv8 package.  Prefer a locally cached YOLOv5 hub checkout, then
+    let ``torch.hub`` fetch that code on a CUDA/Colab machine when necessary.
+    """
+    import torch
+
+    default_weights = Path(__file__).resolve().parents[1] / "yolov5s.pt"
+    checkpoint = Path(default_weights if weights is None else weights).resolve()
+    if not checkpoint.is_file():
+        raise FileNotFoundError(f"YOLOv5 weights not found: {checkpoint}")
+    cached_repo = Path(torch.hub.get_dir()) / "ultralytics_yolov5_master"
+    if cached_repo.is_dir():
+        return torch.hub.load(
+            str(cached_repo),
+            "custom",
+            path=str(checkpoint),
+            source="local",
+            autoshape=False,
+            verbose=False,
+        )
+    return torch.hub.load(
+        "ultralytics/yolov5",
+        "custom",
+        path=str(checkpoint),
+        autoshape=False,
+        trust_repo=True,
+        verbose=False,
+    )
+
+
 def load_raw_yolo_candidates(
     image,
     conf_threshold: float = 0.01,
     image_size: int = 640,
     weights: str | Path | None = None,
+    model=None,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Run local YOLOv5 weights and return pre-NMS candidates for one image.
 
@@ -100,7 +134,6 @@ def load_raw_yolo_candidates(
     Ultralytics' high-level result API (which includes its own NMS).
     """
     import torch
-    from ultralytics import YOLO
 
     if image_size <= 0:
         raise ValueError("image_size must be positive")
@@ -110,11 +143,11 @@ def load_raw_yolo_candidates(
     image_array = np.asarray(resized, dtype=np.float32) / 255.0
     tensor = torch.from_numpy(image_array).permute(2, 0, 1).unsqueeze(0)
 
-    default_weights = Path(__file__).resolve().parents[1] / "yolov5s.pt"
-    model = YOLO(str(default_weights if weights is None else weights))
-    model.model.eval()
+    if model is None:
+        model = load_raw_yolov5_model(weights)
+    model.eval()
     with torch.inference_mode():
-        raw_output = model.model(tensor)
+        raw_output = model(tensor)
     if isinstance(raw_output, (tuple, list)):
         raw_output = raw_output[0]
     boxes, scores, class_ids = raw_yolo_predictions_to_candidates(

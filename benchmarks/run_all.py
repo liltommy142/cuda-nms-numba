@@ -26,7 +26,8 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from cpu_baseline import load_data, run_cpu  # noqa: E402
+from cpu_baseline import run_cpu  # noqa: E402
+from nms_common import load_synthetic_candidates  # noqa: E402
 
 
 def environment() -> dict:
@@ -53,23 +54,26 @@ def environment() -> dict:
 
 def select_runner(version: str):
     if version == "cpu":
-        return run_cpu
+        return run_cpu, True
     if version == "v1":
         from gpu_v1 import run_gpu_v1
-        return run_gpu_v1
+        return run_gpu_v1, True
     if version == "v2":
         from gpu_v2 import run_gpu_v2
-        return run_gpu_v2
+        return run_gpu_v2, True
     if version == "v3":
         from gpu_v3 import run_gpu_v3_matrix_nms
 
-        return lambda boxes, scores: run_gpu_v3_matrix_nms(boxes, scores)
+        return (lambda boxes, scores, class_ids: run_gpu_v3_matrix_nms(boxes, scores)), False
     raise ValueError(version)
 
 
-def timed_run(runner, boxes: np.ndarray, scores: np.ndarray) -> float:
+def timed_run(runner, uses_class_ids: bool, boxes, scores, class_ids) -> float:
     start = time.perf_counter()
-    runner(boxes, scores)
+    if uses_class_ids:
+        runner(boxes, scores, class_ids)
+    else:
+        runner(boxes, scores, class_ids)
     return time.perf_counter() - start
 
 
@@ -81,6 +85,55 @@ def summarize(samples: list[float]) -> dict:
         "mean_seconds": statistics.mean(samples),
         "stddev_seconds": statistics.stdev(samples) if len(samples) > 1 else 0.0,
     }
+
+
+def build_synthetic_report(
+    n: int | list[int] = 100,
+    repeats: int = 7,
+    warmup: int = 2,
+    seed: int = 0,
+    versions: list[str] | tuple[str, ...] = ("cpu",),
+) -> dict:
+    """Measure NMS only on deterministic multi-class candidates.
+
+    This report is intentionally separate from detector inference: it supports
+    fixed candidate stress sizes (100, 1k, 10k) and must never be presented as
+    an end-to-end YOLO latency measurement.
+    """
+    ns = [n] if isinstance(n, int) else list(n)
+    if not ns or any(value < 0 for value in ns):
+        raise ValueError("n must contain non-negative candidate counts")
+    if repeats < 1 or warmup < 0:
+        raise ValueError("repeats must be >= 1 and warmup must be >= 0")
+
+    report = {
+        "benchmark_scope": "nms_only_synthetic",
+        "candidate_source": "deterministic_synthetic",
+        "timing_scope": "candidate NMS only; excludes model inference",
+        "input_semantics": "one image / one class-labelled candidate set",
+        "environment": environment(),
+        "configuration": {
+            "n": ns,
+            "repeats": repeats,
+            "warmup": warmup,
+            "seed": seed,
+            "versions": list(versions),
+        },
+        "results": {},
+    }
+    for candidate_count in ns:
+        boxes, scores, class_ids = load_synthetic_candidates(candidate_count, seed=seed)
+        report["results"][str(candidate_count)] = {}
+        for version in versions:
+            runner, uses_class_ids = select_runner(version)
+            for _ in range(warmup):
+                timed_run(runner, uses_class_ids, boxes, scores, class_ids)
+            samples = [
+                timed_run(runner, uses_class_ids, boxes, scores, class_ids)
+                for _ in range(repeats)
+            ]
+            report["results"][str(candidate_count)][version] = summarize(samples)
+    return report
 
 
 def main() -> None:
@@ -105,23 +158,18 @@ def main() -> None:
     if not versions:
         raise SystemExit("No requested runner is available")
 
-    report = {
-        "environment": info,
-        "configuration": vars(args) | {"json": str(args.json) if args.json else None},
-        "input_semantics": "one image / one box set",
-        "results": {},
-    }
     print(json.dumps(info, indent=2))
+    report = build_synthetic_report(
+        n=args.n,
+        repeats=args.repeats,
+        warmup=args.warmup,
+        seed=args.seed,
+        versions=versions,
+    )
+    report["configuration"]["json"] = str(args.json) if args.json else None
     for n in args.n:
-        boxes, scores = load_data(n, seed=args.seed)
-        report["results"][str(n)] = {}
         for version in versions:
-            runner = select_runner(version)
-            for _ in range(args.warmup):
-                timed_run(runner, boxes, scores)
-            samples = [timed_run(runner, boxes, scores) for _ in range(args.repeats)]
-            result = summarize(samples)
-            report["results"][str(n)][version] = result
+            result = report["results"][str(n)][version]
             print(
                 f"N={n:>6} {version:>3}: "
                 f"median={result['median_seconds'] * 1e3:9.3f} ms  "

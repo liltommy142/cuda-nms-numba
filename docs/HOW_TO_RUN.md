@@ -32,9 +32,12 @@ Colab, hãy push commit cần kiểm tra lên GitHub hoặc upload đúng bản 
 cd "Applied-Parallel-Programming/Project/cuda-nms-numba"
 source .venv/bin/activate
 
-# CPU baseline
-python src/cpu_baseline.py --n 1000 --verify
-python src/cpu_baseline.py --benchmark
+# CPU baseline: class-aware hard NMS on deterministic synthetic candidates
+python src/cpu_baseline.py --source synthetic --n 1000 --verify
+python src/cpu_baseline.py --source synthetic --benchmark --verify
+
+# Real detector integration: raw (pre-NMS) YOLO candidates + CPU NMS
+python src/cpu_baseline.py --source yolo-live --image path/to/image.jpg --verify
 
 # Chạy GPU scripts (Chỉ áp dụng nếu máy bạn CÓ GPU NVIDIA cài sẵn CUDA và Numba)
 python src/gpu_v1.py --benchmark
@@ -61,8 +64,9 @@ python src/gpu_v1.py --n 100 --verify
   - `skipped` (test GPU trên máy không có CUDA) → bình thường, không phải lỗi.
   - Muốn xem log chi tiết khi fail: thêm `-vv` hoặc `--tb=long`.
 
-V2 cũng nhận input batch `(B, N, 4)` / `(B, N)` và chạy một CUDA mask-kernel
-cho cả batch; V1/V3 vẫn xử lý một ảnh mỗi lần gọi. Để đo đúng batch-size 32,
+V2 nhận input class-aware `(B, N, 4)` / `(B, N)` / `(B, N) class_ids`. Khi
+tất cả candidate thuộc một class, V2 chạy một CUDA mask-kernel cho cả batch;
+multi-class được partition theo class trước khi dùng cùng kernel. Để đo đúng batch-size 32,
 không dùng `run_all.py` mà chạy:
 
 ```bash
@@ -74,13 +78,19 @@ python benchmarks/run_v2_batch.py --batch-size 32 --n 10000 \
 CPU greedy resolution). Evidence T4 hiện có là 1.002 s/batch, nên không được
 tuyên bố đạt mục tiêu catalog `<5 ms`/batch.
 
-## 3. Chạy `--real-boxes` (dùng YOLOv5 thật thay vì dữ liệu giả)
+## 3. Chạy detector thật với raw candidate trước NMS
 
 ```bash
-python src/cpu_baseline.py --real-boxes --verify
+python src/cpu_baseline.py --source yolo-live --image path/to/image.jpg --verify
+
+# Report tách thời gian raw detector candidate và NMS
+python benchmarks/run_detector_pipeline.py --image path/to/image.jpg --runner cpu \
+  --json benchmarks/results/detector_pipeline.json
 ```
 
-Cần internet — lần đầu sẽ tải weight YOLOv5s (~14MB) + clone repo `ultralytics/yolov5` về `~/.cache/torch/hub/`. Dependency cho đường này đã được khai báo đủ trong `requirements.txt` (`ultralytics`, `pandas`, `opencv-python`, ...).
+Cần weight `yolov5s.pt` trong repo (đã có) và dependency `ultralytics`. Adapter
+gọi network tensor trực tiếp rồi tự decode `xywh/objectness/class probability`;
+không dùng AutoShape/`Results.boxes` đã NMS.
 
 Nếu gặp lỗi SSL `CERTIFICATE_VERIFY_FAILED` (thường do venv Python thiếu chứng chỉ gốc, hay gặp trên macOS):
 
@@ -94,5 +104,5 @@ export REQUESTS_CA_BUNDLE=$SSL_CERT_FILE
 
 ```bash
 pytest tests/ -v                       # kiểm tra đúng/sai
-python src/cpu_baseline.py --benchmark # đo tốc độ
+python src/cpu_baseline.py --source synthetic --benchmark # đo NMS synthetic
 ```

@@ -155,6 +155,23 @@ def test_raw_yolo_predictions_convert_to_canonical_candidates():
     assert class_ids.tolist() == [1]
 
 
+@pytest.mark.skipif(
+    not os.path.exists(os.path.join(_SRC, "..", "yolov5s.pt")),
+    reason="local YOLOv5 checkpoint is unavailable",
+)
+def test_local_yolov5_adapter_returns_raw_canonical_candidates():
+    from PIL import Image
+    from cpu_baseline import load_raw_yolo_candidates
+
+    boxes, scores, class_ids = load_raw_yolo_candidates(
+        Image.new("RGB", (64, 64), "white"),
+        conf_threshold=0.99,
+        image_size=64,
+    )
+    assert boxes.shape[1] == 4
+    assert scores.shape == class_ids.shape
+
+
 @requires_torch
 def test_cpu_verify_uses_class_aware_oracle():
     from cpu_baseline import verify

@@ -8,7 +8,7 @@ CSC14116 — Applied Parallel Programming, Topic A4. Group 11: Lê Quang Tân (2
 
 ```bash
 pip install -r requirements.txt
-python src/cpu_baseline.py --benchmark
+python src/cpu_baseline.py --source synthetic --benchmark --verify
 python src/gpu_v1.py --benchmark   # requires a CUDA GPU
 pytest tests/
 
@@ -21,13 +21,17 @@ python benchmarks/run_v2_batch.py --batch-size 32 --n 10000 --warmup 2 --repeats
     --json benchmarks/results/v2_batch32.json
 ```
 
-V2 accepts either one image or a batch of independent images.  Its GPU kernel
-builds the suppression bitmasks for the complete batch in one launch, while
-the final greedy mask resolution still runs on the CPU per image.  V1 and V3
-currently process one image / one set of boxes per call.  The measured V2
-batch-32 end-to-end latency on the supplied Tesla T4 evidence is 1.002 s for
-32 × 10,000 boxes, so it does not meet the catalog target of `<5 ms/batch`.
-See `presentation/seminar_2/evidence/` for the raw logs and JSON.
+Baseline, V1 and V2 share a class-aware hard-NMS contract: `boxes (N,4)`,
+`scores (N,)`, `class_ids (N,)`. V2 retains its fused one-launch batch path
+when every candidate belongs to one class; real multi-class candidates are
+partitioned by class and each partition uses the same SoA packed-mask kernel.
+The final greedy mask resolution remains on the CPU. V3 is an unchanged Matrix
+NMS experiment and is not a hard-NMS parity implementation.
+
+`benchmarks/run_all.py` and `run_v2_batch.py` measure **synthetic NMS only**.
+`benchmarks/run_detector_pipeline.py` measures raw YOLO candidate extraction
+and NMS separately. Historical T4 values under `presentation/seminar_2/evidence/`
+are pre-restructure until the current commit is rerun on a CUDA runtime.
 
 See `CSC14116 - Proposal.docx` for the full project proposal.
 

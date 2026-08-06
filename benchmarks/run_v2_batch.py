@@ -22,8 +22,8 @@ import numpy as np
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from cpu_baseline import load_data  # noqa: E402
 from gpu_v2 import run_gpu_v2  # noqa: E402
+from nms_common import load_synthetic_candidates  # noqa: E402
 
 
 def environment() -> dict:
@@ -47,12 +47,16 @@ def environment() -> dict:
     }
 
 
-def make_batch(batch_size: int, n: int, seed: int) -> tuple[np.ndarray, np.ndarray]:
-    """Create deterministic but different synthetic boxes for every image."""
-    samples = [load_data(n, seed + image_idx) for image_idx in range(batch_size)]
+def make_batch(batch_size: int, n: int, seed: int) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Create deterministic, multi-class synthetic candidates for every image."""
+    samples = [
+        load_synthetic_candidates(n, seed + image_idx)
+        for image_idx in range(batch_size)
+    ]
     return (
-        np.stack([boxes for boxes, _ in samples]),
-        np.stack([scores for _, scores in samples]),
+        np.stack([boxes for boxes, _, _ in samples]),
+        np.stack([scores for _, scores, _ in samples]),
+        np.stack([class_ids for _, _, class_ids in samples]),
     )
 
 
@@ -69,25 +73,32 @@ def main() -> None:
         parser.error("batch-size/n/repeats must be positive; warmup must be non-negative")
 
     info = environment()
-    boxes, scores = make_batch(args.batch_size, args.n, args.seed)
+    boxes, scores, class_ids = make_batch(args.batch_size, args.n, args.seed)
 
     # The small launch compiles the kernel.  The following full-size calls also
     # warm allocation/caching effects before any sample is recorded.
-    run_gpu_v2(boxes[:, : min(64, args.n)], scores[:, : min(64, args.n)])
+    run_gpu_v2(
+        boxes[:, : min(64, args.n)],
+        scores[:, : min(64, args.n)],
+        class_ids[:, : min(64, args.n)],
+    )
     for _ in range(args.warmup):
-        run_gpu_v2(boxes, scores)
+        run_gpu_v2(boxes, scores, class_ids)
 
     samples = []
     for _ in range(args.repeats):
         start = time.perf_counter()
-        run_gpu_v2(boxes, scores)
+        run_gpu_v2(boxes, scores, class_ids)
         samples.append(time.perf_counter() - start)
 
     median = statistics.median(samples)
     report = {
+        "benchmark_scope": "nms_only_synthetic",
+        "candidate_source": "deterministic_synthetic",
+        "timing_scope": "candidate NMS only; excludes model inference",
         "environment": info,
         "configuration": vars(args) | {"json": str(args.json)},
-        "input_semantics": "batch_size independent images, n boxes per image",
+        "input_semantics": "batch_size independent images, n class-labelled boxes per image",
         "timing_semantics": (
             "end-to-end V2 call: host sort, transfer, GPU mask kernel, "
             "mask download, and host greedy mask resolution"
