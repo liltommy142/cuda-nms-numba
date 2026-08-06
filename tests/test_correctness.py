@@ -196,16 +196,16 @@ def test_cpu_cli_labels_synthetic_nms_scope():
 
 
 def test_gpu_v1_wrapper_partitions_classes_without_cuda(monkeypatch):
-    import gpu_v1
+    from v1 import core
 
     def keep_every_rank(class_boxes, iou_threshold):
         return np.arange(len(class_boxes), dtype=np.int64)
 
-    monkeypatch.setattr(gpu_v1, "_run_gpu_v1_single_class", keep_every_rank)
+    monkeypatch.setattr(core, "_run_single_class", keep_every_rank)
     boxes, scores, class_ids = load_synthetic_candidates(4, seed=5)
     scores = np.array([0.5, 0.9, 0.7, 0.8], dtype=np.float32)
     class_ids = np.array([0, 1, 0, 1], dtype=np.int32)
-    assert gpu_v1.run_gpu_v1(boxes, scores, class_ids).tolist() == [1, 3, 2, 0]
+    assert core.run_gpu_v1(boxes, scores, class_ids).tolist() == [1, 3, 2, 0]
 
 
 def test_gpu_v2_wrapper_partitions_batched_classes_without_cuda(monkeypatch):
