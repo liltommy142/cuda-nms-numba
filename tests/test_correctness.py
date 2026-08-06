@@ -7,6 +7,7 @@ Run with:
 """
 
 import os
+import subprocess
 import sys
 
 import numpy as np
@@ -20,6 +21,7 @@ from cpu_baseline import iou_one_to_many, load_data, run_cpu  # noqa: E402
 from gpu_v3 import matrix_nms_reference  # noqa: E402
 from nms_common import (  # noqa: E402
     load_synthetic_candidates,
+    torchvision_class_aware_nms,
     validate_candidates,
 )
 
@@ -122,6 +124,60 @@ def test_run_cpu_keeps_both_when_far_apart():
     assert set(keep.tolist()) == {0, 1}
 
 
+def test_cpu_keeps_overlapping_boxes_from_different_classes():
+    boxes = np.array([[0, 0, 10, 10], [0, 0, 10, 10]], dtype=np.float32)
+    scores = np.array([0.9, 0.8], dtype=np.float32)
+    class_ids = np.array([0, 1], dtype=np.int32)
+    assert run_cpu(boxes, scores, class_ids).tolist() == [0, 1]
+
+
+@requires_torch
+def test_cpu_matches_torchvision_per_class():
+    boxes, scores, class_ids = load_synthetic_candidates(200, seed=12)
+    actual = run_cpu(boxes, scores, class_ids)
+    expected = torchvision_class_aware_nms(boxes, scores, class_ids, 0.5)
+    assert np.array_equal(actual, expected)
+
+
+def test_raw_yolo_predictions_convert_to_canonical_candidates():
+    from cpu_baseline import raw_yolo_predictions_to_candidates
+
+    raw_prediction = np.array([
+        [20, 30, 10, 20, 0.8, 0.1, 0.9],
+        [50, 60, 20, 10, 0.2, 0.8, 0.2],
+    ], dtype=np.float32)
+    boxes, scores, class_ids = raw_yolo_predictions_to_candidates(
+        raw_prediction,
+        conf_threshold=0.3,
+    )
+    assert np.array_equal(boxes, np.array([[15, 20, 25, 40]], dtype=np.float32))
+    assert np.allclose(scores, np.array([0.72], dtype=np.float32))
+    assert class_ids.tolist() == [1]
+
+
+@requires_torch
+def test_cpu_verify_uses_class_aware_oracle():
+    from cpu_baseline import verify
+
+    boxes = np.array([[0, 0, 10, 10], [0, 0, 10, 10]], dtype=np.float32)
+    scores = np.array([0.9, 0.8], dtype=np.float32)
+    class_ids = np.array([0, 1], dtype=np.int32)
+    keep = run_cpu(boxes, scores, class_ids)
+    assert verify(boxes, scores, 0.5, keep, class_ids) is True
+
+
+def test_cpu_cli_labels_synthetic_nms_scope():
+    script = os.path.join(_SRC, "cpu_baseline.py")
+    completed = subprocess.run(
+        [sys.executable, script, "--source", "synthetic", "--benchmark", "--verify"],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert "benchmark_scope: nms_only_synthetic" in completed.stdout
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # CPU baseline — reference match (requires torch + torchvision)
 # ─────────────────────────────────────────────────────────────────────────────
@@ -136,7 +192,7 @@ def test_cpu_matches_torchvision_reference(n):
     boxes, scores = load_data(n, seed=42)
     iou_threshold = 0.5
 
-    ours = set(run_cpu(boxes, scores, iou_threshold).tolist())
+    ours = set(run_cpu(boxes, scores, iou_threshold=iou_threshold).tolist())
     theirs = set(
         torch_nms(torch.from_numpy(boxes), torch.from_numpy(scores), iou_threshold)
         .numpy()
@@ -240,7 +296,7 @@ def test_gpu_v1_matches_cpu_baseline(n):
     boxes, scores = load_data(n, seed=42)
     iou_threshold = 0.5
 
-    cpu_keep = set(run_cpu(boxes, scores, iou_threshold).tolist())
+    cpu_keep = set(run_cpu(boxes, scores, iou_threshold=iou_threshold).tolist())
     gpu_keep = set(run_gpu_v1(boxes, scores, iou_threshold).tolist())
 
     assert cpu_keep == gpu_keep, (
@@ -371,7 +427,7 @@ def test_gpu_v2_batched_matches_cpu_at_partial_64_block(batch_size):
     assert isinstance(gpu_keeps, list)
     assert len(gpu_keeps) == len(boxes)
     for image_idx, gpu_keep in enumerate(gpu_keeps):
-        cpu_keep = run_cpu(boxes[image_idx], scores[image_idx], 0.5)
+        cpu_keep = run_cpu(boxes[image_idx], scores[image_idx], iou_threshold=0.5)
         assert set(gpu_keep.tolist()) == set(cpu_keep.tolist())
 
 
@@ -401,7 +457,7 @@ def test_gpu_v2_matches_cpu_baseline(n):
     boxes, scores = load_data(n, seed=42)
     iou_threshold = 0.5
 
-    cpu_keep = set(run_cpu(boxes, scores, iou_threshold).tolist())
+    cpu_keep = set(run_cpu(boxes, scores, iou_threshold=iou_threshold).tolist())
     gpu_keep = set(run_gpu_v2(boxes, scores, iou_threshold).tolist())
 
     assert cpu_keep == gpu_keep, (
@@ -439,7 +495,7 @@ def test_gpu_v2_various_thresholds(iou_threshold):
 
     boxes, scores = load_data(200, seed=7)
 
-    cpu_keep = set(run_cpu(boxes, scores, iou_threshold).tolist())
+    cpu_keep = set(run_cpu(boxes, scores, iou_threshold=iou_threshold).tolist())
     gpu_keep = set(run_gpu_v2(boxes, scores, iou_threshold).tolist())
 
     assert cpu_keep == gpu_keep, (
@@ -465,7 +521,7 @@ def test_gpu_v2_matches_cpu_with_score_ties():
     scores = (rng.integers(0, 5, size=300).astype(np.float32)) / 4.0
 
     iou_threshold = 0.5
-    cpu_keep = set(run_cpu(boxes, scores, iou_threshold).tolist())
+    cpu_keep = set(run_cpu(boxes, scores, iou_threshold=iou_threshold).tolist())
     gpu_keep = set(run_gpu_v2(boxes, scores, iou_threshold).tolist())
 
     assert cpu_keep == gpu_keep, (
