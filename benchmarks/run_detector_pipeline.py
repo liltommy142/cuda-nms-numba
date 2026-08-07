@@ -19,7 +19,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from cpu_baseline import (  # noqa: E402
-    load_raw_yolo_candidates,
+    load_raw_yolo_candidate_selection,
     load_raw_yolov5_model,
     run_cpu,
 )
@@ -45,8 +45,9 @@ def build_detector_report(
     image,
     *,
     runner=run_cpu,
-    loader=load_raw_yolo_candidates,
+    loader=load_raw_yolo_candidate_selection,
     conf_threshold: float = 0.01,
+    max_candidates: int | None = None,
     repeats: int = 3,
     warmup: int = 1,
 ) -> dict:
@@ -55,8 +56,12 @@ def build_detector_report(
         raise ValueError("repeats must be >= 1 and warmup must be >= 0")
 
     for _ in range(warmup):
-        boxes, scores, class_ids = loader(image, conf_threshold=conf_threshold)
-        runner(boxes, scores, class_ids)
+        selection = loader(
+            image,
+            conf_threshold=conf_threshold,
+            max_candidates=max_candidates,
+        )
+        runner(selection.boxes, selection.scores, selection.class_ids)
 
     raw_candidate_seconds: list[float] = []
     nms_seconds: list[float] = []
@@ -64,16 +69,22 @@ def build_detector_report(
     last_keep = None
     for _ in range(repeats):
         start = time.perf_counter()
-        boxes, scores, class_ids = loader(image, conf_threshold=conf_threshold)
+        selection = loader(
+            image,
+            conf_threshold=conf_threshold,
+            max_candidates=max_candidates,
+        )
         raw_candidate_seconds.append(time.perf_counter() - start)
 
         start = time.perf_counter()
-        keep = runner(boxes, scores, class_ids)
+        keep = runner(selection.boxes, selection.scores, selection.class_ids)
         nms_seconds.append(time.perf_counter() - start)
-        last_candidates = (boxes, scores, class_ids)
+        last_candidates = selection
         last_keep = keep
 
-    boxes, scores, class_ids = last_candidates
+    boxes = last_candidates.boxes
+    scores = last_candidates.scores
+    class_ids = last_candidates.class_ids
     oracle = torchvision_class_aware_nms(boxes, scores, class_ids, 0.5)
     return {
         "benchmark_scope": "detector_plus_nms_real",
@@ -85,10 +96,14 @@ def build_detector_report(
         "environment": environment(),
         "configuration": {
             "conf_threshold": conf_threshold,
+            "max_candidates": max_candidates,
             "repeats": repeats,
             "warmup": warmup,
         },
+        "raw_proposal_count": last_candidates.raw_proposal_count,
         "candidate_count": len(boxes),
+        "effective_conf_threshold": last_candidates.effective_conf_threshold,
+        "max_candidates": last_candidates.max_candidates,
         "class_count": len(set(class_ids.tolist())),
         "kept_count": len(last_keep),
         "raw_candidate_seconds": raw_candidate_seconds,
@@ -104,17 +119,22 @@ def main() -> None:
     parser.add_argument("--image", required=True, help="local image path or URL")
     parser.add_argument("--runner", choices=("cpu", "v1", "v2"), default="cpu")
     parser.add_argument("--conf-threshold", type=float, default=0.01)
+    parser.add_argument(
+        "--max-candidates", type=int, default=None,
+        help="adaptive raw-YOLO pre-NMS candidate budget; e.g. 11000",
+    )
     parser.add_argument("--repeats", type=int, default=3)
     parser.add_argument("--warmup", type=int, default=1)
     parser.add_argument("--json", type=Path, required=True)
     args = parser.parse_args()
     model = load_raw_yolov5_model()
 
-    def loader(image, conf_threshold=0.01):
-        return load_raw_yolo_candidates(
+    def loader(image, conf_threshold=0.01, max_candidates=None):
+        return load_raw_yolo_candidate_selection(
             image,
             conf_threshold=conf_threshold,
             model=model,
+            max_candidates=max_candidates,
         )
 
     report = build_detector_report(
@@ -122,6 +142,7 @@ def main() -> None:
         runner=select_hard_nms_runner(args.runner),
         loader=loader,
         conf_threshold=args.conf_threshold,
+        max_candidates=args.max_candidates,
         repeats=args.repeats,
         warmup=args.warmup,
     )

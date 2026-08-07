@@ -12,6 +12,10 @@ It is deliberately serial and provides the result that V1 and V2 must match.
 Flow: raw/synthetic candidates → validate → split by class → stable score order
 → greedy CPU suppression → original indices. The raw YOLO adapter deliberately
 uses model output before YOLO's own NMS, so the project NMS is what is measured.
+For stress and controlled GPU inputs, the adapter can apply an adaptive
+`max_candidates` budget: it takes the highest raw scores with a stable raw-index
+tie-break and records the effective cutoff. This is an input budget, not a
+production detector-confidence calibration.
 
 Use `cpu_baseline.py` for the public CLI/import path. New internal code should
 import `baseline.core` or `baseline.yolov5_adapter` directly.
