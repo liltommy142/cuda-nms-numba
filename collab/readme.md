@@ -1,5 +1,16 @@
 # Google Colab — GPU test runbook (T4, Baseline/V1/V2)
 
+## Fast path: one notebook, Run all
+
+Open [gpu_test_colab.ipynb](gpu_test_colab.ipynb) in Colab, choose
+**Runtime → Change runtime type → T4 GPU**, then select **Run all**. It clones
+or refreshes `main`, creates the verified CUDA 13 environment, runs the smoke
+test, full pytest suite, V1/V2 benchmark sweep, and V2 B=32 benchmark, then
+creates an evidence ZIP. The detector cell is intentionally skipped unless you
+explicitly enable it and upload `yolov5s.pt`.
+
+Use the terminal instructions below only for troubleshooting a failed cell.
+
 This is the exact, terminal-first procedure that was verified on Google Colab
 on 2026-08-07. It runs the project source at a chosen git commit, validates
 CUDA JIT, runs the complete test suite, then records V1/V2 benchmark evidence.
