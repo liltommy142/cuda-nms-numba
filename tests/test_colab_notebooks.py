@@ -25,6 +25,7 @@ def test_colab_gpu_notebook_contains_complete_v1_v2_workflow() -> None:
         "benchmarks/run_all.py",
         "benchmarks/run_v2_batch.py",
         "files.download",
+        "archive = evidence_dir / f\"{commit}.zip\"",
         "--max-candidates 11000",
     ):
         assert marker in source
