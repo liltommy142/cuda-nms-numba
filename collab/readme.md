@@ -1,169 +1,326 @@
-# Google Colab runbook — Baseline, V1 and V2
+# Google Colab — GPU test runbook (T4, Baseline/V1/V2)
 
-Use this runbook on a fresh NVIDIA Colab runtime to generate evidence for the
-exact commit being presented. It covers Baseline, V1 and V2 only; V3 is out of
-scope.
+This is the exact, terminal-first procedure that was verified on Google Colab
+on 2026-08-07. It runs the project source at a chosen git commit, validates
+CUDA JIT, runs the complete test suite, then records V1/V2 benchmark evidence.
 
-## Required evidence
+Scope: Baseline, V1, V2 and the adaptive raw-YOLO candidate budget. Do not
+change V3 for this run.
 
-| Run | Command output to save |
+## Read this before running
+
+- In Colab, select **Runtime → Change runtime type → T4 GPU**.
+- Run commands either in the **Colab terminal** or in **notebook code cells**;
+  the syntax differs:
+  - Terminal: normal Bash only. Never paste `!`, `%cd`, or Python source into
+    the terminal.
+  - Code cell: use the `%%bash` cells below as-is.
+- Do **not** run `pip install -r requirements.txt` in Colab's global Python.
+  It pins legacy `numba==0.59.1`, which segfaults on the current CUDA 13
+  Colab runtime, and its regular PyTorch wheel pulls CUDA 12 libraries that
+  conflict with CUDA 13 linking.
+- The working Colab environment is isolated at
+  `/content/nms-cu13-venv`: `numba-cuda[cu13]`, NumPy 1.26.4,
+  pytest 9.1.1, and CPU-only torch/torchvision for the reference oracle.
+  NVIDIA's CUDA 13 installation route is `numba-cuda[cu13]`.
+
+## Expected evidence
+
+| Artifact | Meaning |
 |---|---|
-| CUDA correctness | `pytest_cuda.txt` |
-| CPU/V1/V2, N=100/1k/10k | `benchmark_v1_v2.json` and `.txt` |
-| V2, B=32, N=10k | `batch32_v2.json` and `.txt` |
-| Raw YOLO candidate integration | `detector_cpu.json` and `.txt` |
+| `pytest_cuda.txt` | Complete test-suite result from the T4 runtime. |
+| `benchmark_v1_v2.json` | CPU/V1/V2 synthetic NMS sweep at N=100, 1k, 10k. |
+| `batch32_v2.json` | V2 end-to-end B=32, N=10k measurement. |
+| `environment.txt` | Commit SHA, GPU, Python and package versions. |
+| `detector_v2_cap11000.json` (optional) | Raw YOLO → 11k candidate budget → GPU V2 NMS. |
 
-Single-image and batch reports measure **synthetic NMS only**, never complete
-detector inference latency.
+The first three benchmark artifacts measure **NMS only**. They do not measure
+end-to-end object detector latency.
 
-## 1. Start with a real CUDA runtime
+## A. Terminal workflow
 
-In Colab choose **Runtime → Change runtime type → T4 GPU** (or another NVIDIA
-GPU), then run:
+Open **Tools → Terminal** in Colab and run the following blocks in order.
 
-```python
-!nvidia-smi
+### A1. Check the GPU
 
-import sys
+~~~bash
+nvidia-smi
+~~~
+
+The machine must show an NVIDIA GPU, normally Tesla T4.
+
+### A2. Clone (or select) the exact source commit
+
+Set `COMMIT` to the commit you intend to present. At the time this guide was
+written, `c767fbd` contains the adaptive 11k-candidate feature.
+
+~~~bash
+COMMIT=c767fbd
+REPO=/content/cuda-nms-numba
+
+if [ ! -d "$REPO/.git" ]; then
+  git clone https://github.com/liltommy142/cuda-nms-numba.git "$REPO"
+fi
+
+cd "$REPO"
+git fetch origin
+git checkout "$COMMIT"
+git rev-parse HEAD
+~~~
+
+### A3. Create the CUDA 13 environment
+
+~~~bash
+python -m pip install -q virtualenv
+python -m virtualenv --clear /content/nms-cu13-venv
+
+/content/nms-cu13-venv/bin/python -m pip install --no-cache-dir \
+  "numpy==1.26.4" "pytest==9.1.1" "numba-cuda[cu13]"
+
+/content/nms-cu13-venv/bin/python -m pip install --no-cache-dir \
+  "torch==2.5.1" "torchvision==0.20.1" \
+  --index-url https://download.pytorch.org/whl/cpu
+~~~
+
+CPU-only PyTorch is deliberate: it provides `torchvision.ops.nms` for the
+oracle without introducing a second CUDA toolkit into the Numba CUDA 13
+environment.
+
+### A4. CUDA smoke test — mandatory before pytest
+
+~~~bash
+cd /content/cuda-nms-numba
+PYTHONPATH="$PWD/src" /content/nms-cu13-venv/bin/python - <<'PY'
+import numpy as np
 from numba import cuda
+from gpu_v1 import compute_iou_matrix_gpu
 
-print("Python:", sys.version)
-assert cuda.is_available(), "Reconnect with an NVIDIA GPU runtime."
-device = cuda.get_current_device()
-name = device.name.decode() if isinstance(device.name, bytes) else device.name
-print("GPU:", name, "compute capability:", device.compute_capability)
-```
+print("CUDA module:", cuda.__file__)
+print("CUDA available:", cuda.is_available())
+assert cuda.is_available()
 
-The project pins `numpy==1.26.4` and `numba==0.59.1`; Python 3.11 is the
-supported target. If Colab cannot install that Numba version, stop and record
-the Python version instead of benchmarking a different toolchain.
+boxes = np.array([[0, 0, 2, 2], [1, 1, 3, 3]], dtype=np.float32)
+iou = compute_iou_matrix_gpu(boxes)
+assert np.allclose(np.diag(iou), 1.0)
+print("V1 CUDA JIT smoke test: PASS")
+PY
+~~~
 
-## 2. Clone an already-pushed commit
+A warning about low occupancy for this two-box smoke test is expected. Any
+segmentation fault, `nvJitLinkError`, or failed assertion means stop; do not
+record benchmark numbers.
 
-Set `COMMIT` to the commit you will present. Do not run uncommitted local code
-or reuse historical T4 evidence.
+### A5. Full test suite
 
-```python
-COMMIT = "3fbf757"  # replace before a final evidence run
-!git clone https://github.com/liltommy142/cuda-nms-numba.git /content/cuda-nms-numba
-%cd /content/cuda-nms-numba
-!git checkout {COMMIT}
-!git rev-parse HEAD
-
-!python -m pip install -q "numpy==1.26.4" "numba==0.59.1" "pytest==9.1.1"
-!python -m pip install -q -r requirements.txt
-```
-
-Restart the runtime if pip asks. After a restart repeat the CUDA check and
-clone/checkout cells.
-
-## 3. Capture environment metadata
-
-```python
-import os
-from pathlib import Path
-EVIDENCE_DIR = Path("/content/evidence") / COMMIT
-EVIDENCE_DIR.mkdir(parents=True, exist_ok=True)
-os.environ["EVIDENCE_DIR"] = str(EVIDENCE_DIR)
-```
-
-```bash
-%%bash
-set -euo pipefail
-cd /content/cuda-nms-numba
-git rev-parse HEAD | tee "$EVIDENCE_DIR/commit.txt"
-nvidia-smi | tee "$EVIDENCE_DIR/nvidia-smi.txt"
-python --version | tee "$EVIDENCE_DIR/python.txt"
-python -m pip show numpy numba torch torchvision | tee "$EVIDENCE_DIR/packages.txt"
-```
-
-## 4. Required: full CUDA correctness
-
-```bash
-%%bash
+~~~bash
 set -o pipefail
-cd /content/cuda-nms-numba
-python -m pytest tests -q -rs 2>&1 | tee "$EVIDENCE_DIR/pytest_cuda.txt"
+COMMIT=$(git rev-parse --short HEAD)
+EVIDENCE_DIR="/content/evidence/$COMMIT"
+mkdir -p "$EVIDENCE_DIR"
+
+PYTHONPATH="$PWD/src" /content/nms-cu13-venv/bin/python -m pytest tests -q -rs \
+  2>&1 | tee "$EVIDENCE_DIR/pytest_cuda.txt"
 test ${PIPESTATUS[0]} -eq 0
-```
+~~~
 
-Any failed or CUDA-skipped test invalidates the GPU evidence run. If a detector
-test skips because `yolov5s.pt` is absent, do not claim the detector path is
-verified until the weight is provided and the suite is rerun.
+The verified run produced `78 passed, 1 skipped`. The single skip was the
+live YOLO test because `yolov5s.pt` had not been uploaded; all CUDA tests ran.
 
-## 5. Required: V1/V2 single-image benchmark
+### A6. Benchmark CPU, V1, V2
 
-```bash
-%%bash
+~~~bash
 set -euo pipefail
-cd /content/cuda-nms-numba
-python benchmarks/run_all.py \
+PYTHONPATH="$PWD/src" /content/nms-cu13-venv/bin/python benchmarks/run_all.py \
   --versions cpu v1 v2 --n 100 1000 10000 \
   --warmup 2 --repeats 7 --seed 0 \
   --json "$EVIDENCE_DIR/benchmark_v1_v2.json" \
   | tee "$EVIDENCE_DIR/benchmark_v1_v2.txt"
-```
+~~~
 
-## 6. Required: V2 batch-size-32 benchmark
+### A7. Benchmark V2 batch size 32
 
-This includes host sort, transfer, GPU mask kernel, mask copy-back and CPU
-greedy-mask resolution.
+This timing includes host sort, host→device copy, GPU bitmask kernel,
+device→host copy, and CPU greedy-mask resolution.
 
-```bash
-%%bash
+~~~bash
 set -euo pipefail
-cd /content/cuda-nms-numba
-python benchmarks/run_v2_batch.py \
+PYTHONPATH="$PWD/src" /content/nms-cu13-venv/bin/python benchmarks/run_v2_batch.py \
   --batch-size 32 --n 10000 --warmup 2 --repeats 7 --seed 0 \
   --json "$EVIDENCE_DIR/batch32_v2.json" \
   | tee "$EVIDENCE_DIR/batch32_v2.txt"
-```
+~~~
 
-## 7. Required for a detector-integration claim
+### A8. Save reproducibility metadata and list artifacts
 
-Upload a trusted `yolov5s.pt` file to `/content/cuda-nms-numba/yolov5s.pt`,
-then use a fixed public image URL or local image path:
+~~~bash
+{
+  git rev-parse HEAD
+  nvidia-smi
+  /content/nms-cu13-venv/bin/python --version
+  /content/nms-cu13-venv/bin/python -m pip show numba numba-cuda torch torchvision
+} > "$EVIDENCE_DIR/environment.txt"
 
-```bash
+ls -lh "$EVIDENCE_DIR"
+~~~
+
+## B. Notebook code-cell workflow
+
+Use this route if you want a clean notebook instead of the terminal. Insert
+one **code cell** for each block below and execute from top to bottom.
+
+### Cell 1 — runtime check
+
+~~~python
+!nvidia-smi
+~~~
+
+### Cell 2 — clone and checkout
+
+~~~bash
 %%bash
+set -euo pipefail
+COMMIT=c767fbd
+REPO=/content/cuda-nms-numba
+
+if [ ! -d "$REPO/.git" ]; then
+  git clone https://github.com/liltommy142/cuda-nms-numba.git "$REPO"
+fi
+
+cd "$REPO"
+git fetch origin
+git checkout "$COMMIT"
+git rev-parse HEAD
+~~~
+
+### Cell 3 — install the isolated CUDA 13 environment
+
+~~~bash
+%%bash
+set -euo pipefail
+python -m pip install -q virtualenv
+python -m virtualenv --clear /content/nms-cu13-venv
+
+/content/nms-cu13-venv/bin/python -m pip install --no-cache-dir \
+  "numpy==1.26.4" "pytest==9.1.1" "numba-cuda[cu13]"
+
+/content/nms-cu13-venv/bin/python -m pip install --no-cache-dir \
+  "torch==2.5.1" "torchvision==0.20.1" \
+  --index-url https://download.pytorch.org/whl/cpu
+~~~
+
+### Cell 4 — JIT smoke test
+
+~~~bash
+%%bash
+set -euo pipefail
+cd /content/cuda-nms-numba
+PYTHONPATH="$PWD/src" /content/nms-cu13-venv/bin/python - <<'PY'
+import numpy as np
+from numba import cuda
+from gpu_v1 import compute_iou_matrix_gpu
+
+assert cuda.is_available()
+boxes = np.array([[0, 0, 2, 2], [1, 1, 3, 3]], dtype=np.float32)
+assert np.allclose(np.diag(compute_iou_matrix_gpu(boxes)), 1.0)
+print("V1 CUDA JIT smoke test: PASS")
+PY
+~~~
+
+### Cell 5 — run tests and all required benchmarks
+
+~~~bash
+%%bash
+set -euo pipefail
+cd /content/cuda-nms-numba
+COMMIT=$(git rev-parse --short HEAD)
+EVIDENCE_DIR="/content/evidence/$COMMIT"
+mkdir -p "$EVIDENCE_DIR"
+export PYTHONPATH="$PWD/src"
+PYTHON=/content/nms-cu13-venv/bin/python
+
+"$PYTHON" -m pytest tests -q -rs 2>&1 | tee "$EVIDENCE_DIR/pytest_cuda.txt"
+
+"$PYTHON" benchmarks/run_all.py \
+  --versions cpu v1 v2 --n 100 1000 10000 \
+  --warmup 2 --repeats 7 --seed 0 \
+  --json "$EVIDENCE_DIR/benchmark_v1_v2.json" \
+  | tee "$EVIDENCE_DIR/benchmark_v1_v2.txt"
+
+"$PYTHON" benchmarks/run_v2_batch.py \
+  --batch-size 32 --n 10000 --warmup 2 --repeats 7 --seed 0 \
+  --json "$EVIDENCE_DIR/batch32_v2.json" \
+  | tee "$EVIDENCE_DIR/batch32_v2.txt"
+
+{
+  git rev-parse HEAD
+  nvidia-smi
+  "$PYTHON" --version
+  "$PYTHON" -m pip show numba numba-cuda torch torchvision
+} > "$EVIDENCE_DIR/environment.txt"
+~~~
+
+### Cell 6 — download the evidence ZIP
+
+~~~python
+from pathlib import Path
+from shutil import make_archive
+from google.colab import files
+import subprocess
+
+commit = subprocess.check_output(
+    ["git", "-C", "/content/cuda-nms-numba", "rev-parse", "--short", "HEAD"],
+    text=True,
+).strip()
+evidence_dir = Path("/content/evidence") / commit
+archive = make_archive(str(evidence_dir), "zip", evidence_dir)
+files.download(archive)
+~~~
+
+## C. Optional detector + adaptive 11k candidate budget
+
+This is separate from the NMS-only benchmarks. First upload trusted
+`yolov5s.pt` to `/content/cuda-nms-numba/yolov5s.pt`. Then install the
+detector-only dependencies into the same virtual environment, keeping NumPy,
+Numba-CUDA, and CPU PyTorch already installed:
+
+~~~bash
+cd /content/cuda-nms-numba
+/content/nms-cu13-venv/bin/python -m pip install --no-cache-dir \
+  ultralytics pandas seaborn matplotlib "opencv-python<4.12" scipy gitpython tqdm thop
+~~~
+
+Run raw YOLO extraction with GPU V2 NMS and the adaptive budget:
+
+~~~bash
 set -euo pipefail
 cd /content/cuda-nms-numba
 test -f yolov5s.pt
-python benchmarks/run_detector_pipeline.py \
-  --image "IMAGE_URL_OR_LOCAL_PATH" --runner cpu --repeats 3 --warmup 1 \
-  --json "$EVIDENCE_DIR/detector_cpu.json" \
-  | tee "$EVIDENCE_DIR/detector_cpu.txt"
-```
+COMMIT=$(git rev-parse --short HEAD)
+EVIDENCE_DIR="/content/evidence/$COMMIT"
+mkdir -p "$EVIDENCE_DIR"
+PYTHONPATH="$PWD/src" /content/nms-cu13-venv/bin/python benchmarks/run_detector_pipeline.py \
+  --image "https://ultralytics.com/images/zidane.jpg" \
+  --runner v2 --conf-threshold 0.01 --max-candidates 11000 \
+  --repeats 3 --warmup 1 \
+  --json "$EVIDENCE_DIR/detector_v2_cap11000.json" \
+  | tee "$EVIDENCE_DIR/detector_v2_cap11000.txt"
+~~~
 
-The report times raw candidate extraction and NMS separately and checks NMS
-against per-class `torchvision.ops.nms`.
+The JSON must show `raw_proposal_count`, `candidate_count <= 11000`,
+`effective_conf_threshold`, `max_candidates: 11000`, and
+`torchvision_parity: true`. Model candidate extraction is CPU-side in this
+environment; only the selected NMS runner (`v2`) is GPU execution.
 
-## 8. Optional: CPU hotspot profile
+## Verified reference result
 
-`cProfile` explains the CPU bottleneck; it does not measure CUDA kernel speed.
+On the verified Tesla T4 run, commit `c767fbd`:
 
-```bash
-%%bash
-set -euo pipefail
-cd /content/cuda-nms-numba
-python -m cProfile -o "$EVIDENCE_DIR/cpu_n10000.prof" \
-  src/cpu_baseline.py --source synthetic --n 10000
-python -c "import pstats; pstats.Stats('$EVIDENCE_DIR/cpu_n10000.prof').strip_dirs().sort_stats('cumulative').print_stats('run_cpu|_run_single_class|iou_one_to_many')" \
-  | tee "$EVIDENCE_DIR/cpu_n10000_profile.txt"
-```
+| N | CPU median | V1 median | V2 median |
+|---:|---:|---:|---:|
+| 100 | 3.050 ms | 2.697 ms | 5.572 ms |
+| 1,000 | 33.741 ms | 6.069 ms | 8.168 ms |
+| 10,000 | 790.201 ms | 83.917 ms | 32.021 ms |
 
-## 9. Download evidence
-
-Inspect the test log, commit SHA and both benchmark JSON files. Then download
-the ZIP and commit selected evidence under `presentation/seminar_2/evidence/`.
-
-```python
-from google.colab import files
-import shutil
-
-archive = shutil.make_archive(str(EVIDENCE_DIR), "zip", EVIDENCE_DIR)
-files.download(archive)
-```
-
-Never store a GitHub token in Colab and never copy historical T4 numbers into a
-new report.
+V2 batch B=32, N=10,000: median batch time **1.116 s**; median per-image time
+**34.876 ms**. Treat these as one T4 evidence run, not a universal performance
+claim.
