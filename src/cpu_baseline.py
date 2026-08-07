@@ -8,8 +8,11 @@ documented imports and command path.
 from baseline.cli import main
 from baseline.core import benchmark, iou_one_to_many, run_cpu, verify
 from baseline.yolov5_adapter import (
+    RawCandidateSelection,
+    load_raw_yolo_candidate_selection,
     load_raw_yolo_candidates,
     load_raw_yolov5_model,
+    raw_yolo_predictions_to_selection,
     raw_yolo_predictions_to_candidates,
 )
 from common.candidates import load_synthetic_candidates
@@ -25,8 +28,11 @@ __all__ = [
     "benchmark",
     "iou_one_to_many",
     "load_data",
+    "RawCandidateSelection",
+    "load_raw_yolo_candidate_selection",
     "load_raw_yolo_candidates",
     "load_raw_yolov5_model",
+    "raw_yolo_predictions_to_selection",
     "raw_yolo_predictions_to_candidates",
     "run_cpu",
     "verify",
