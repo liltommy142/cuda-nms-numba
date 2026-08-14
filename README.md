@@ -16,7 +16,7 @@ pytest tests/
 python benchmarks/run_all.py --versions cpu v1 v2 v3 --repeats 7 \
     --json benchmarks/results/measurement.json
 
-# V2 end-to-end batch-32 measurement (one CUDA mask launch for 32 images)
+# V2 end-to-end batch-32 measurement (class-aware batch API; multi-class inputs launch separately per class partition)
 python benchmarks/run_v2_batch.py --batch-size 32 --n 10000 --warmup 2 --repeats 7 \
     --json benchmarks/results/v2_batch32.json
 ```

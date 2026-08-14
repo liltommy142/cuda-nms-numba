@@ -7,7 +7,11 @@ Group 11
 - Phùng Quốc Tuấn (19127616)
 
 Repository: https://github.com/liltommy142/cuda-nms-numba
-Evidence source_commit=7ee76cd5f6e12b87ddee247d58c9fd6ac866245b
+Evidence tested source_commit=7ee76cd5f6e12b87ddee247d58c9fd6ac866245b
+Package content base_commit=378cae1389de06aca9a1b92214798fd0fa5f0370
+The final metadata commit is the Git commit containing this manifest and its
+checksum file. `SHA256SUMS.txt` intentionally avoids hashing itself, so the
+package can record final metadata without a circular self-hash.
 
 Scope and claim boundaries
 --------------------------

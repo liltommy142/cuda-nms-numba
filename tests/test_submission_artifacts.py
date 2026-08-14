@@ -4,10 +4,33 @@ import subprocess
 
 import nbformat
 from nbclient import NotebookClient
+import pytest
 
 
 ROOT = Path(__file__).resolve().parents[1]
 SUBMISSION = ROOT / "submission" / "seminar_3"
+CHECKSUM_PATHS = (
+    "FINAL_REPORT.ipynb",
+    "README.md",
+    "SUBMISSION_MANIFEST.txt",
+    "TEAM_PLAN.md",
+    "evidence/batch32_v2.json",
+    "evidence/batch32_v2.txt",
+    "evidence/benchmark_v1_v2.json",
+    "evidence/benchmark_v1_v2.txt",
+    "evidence/environment.txt",
+    "evidence/pytest_cuda.txt",
+)
+
+
+def _validated_checksum_relative(relative: str) -> Path:
+    candidate = Path(relative)
+    assert relative == candidate.as_posix()
+    assert not candidate.is_absolute()
+    assert ".." not in candidate.parts
+    assert "." not in candidate.parts
+    assert relative in CHECKSUM_PATHS
+    return candidate
 
 
 def _checksum_payload(path: Path) -> bytes:
@@ -22,7 +45,7 @@ def _checksum_payload(path: Path) -> bytes:
 
     relative = path.relative_to(ROOT).as_posix()
     object_id = subprocess.run(
-        ["git", "hash-object", f"--path={relative}", str(path)],
+        ["git", "hash-object", "-w", f"--path={relative}", str(path)],
         cwd=ROOT,
         check=True,
         capture_output=True,
@@ -76,6 +99,12 @@ def test_submission_reproduction_commands_match_saved_evidence():
         assert "per_image_ms < 5" not in text
 
 
+def test_root_readme_describes_class_aware_batch_launches():
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    assert "class-aware batch API; multi-class inputs launch separately per class partition" in readme
+    assert "one CUDA mask launch for 32 images" not in readme
+
+
 def test_submission_checksums_match_files():
     lines = (SUBMISSION / "SHA256SUMS.txt").read_text(encoding="utf-8").splitlines()
     assert lines
@@ -85,10 +114,15 @@ def test_submission_checksums_match_files():
         assert len(expected) == 64
         assert expected == expected.lower()
         assert relative != "SHA256SUMS.txt"
-        payload = _checksum_payload(SUBMISSION / relative)
+        payload = _checksum_payload(SUBMISSION / _validated_checksum_relative(relative))
         assert hashlib.sha256(payload).hexdigest() == expected
         relatives.append(relative)
-    assert relatives == sorted(relatives)
+    assert tuple(relatives) == CHECKSUM_PATHS
+
+
+def test_checksum_relative_rejects_path_traversal_before_reading():
+    with pytest.raises(AssertionError):
+        _validated_checksum_relative("../README.md")
 
 
 def test_manifest_names_every_required_deliverable():
@@ -103,3 +137,6 @@ def test_manifest_names_every_required_deliverable():
         "evidence/environment.txt",
     ):
         assert name in manifest
+    assert "Evidence tested source_commit=7ee76cd5f6e12b87ddee247d58c9fd6ac866245b" in manifest
+    assert "Package content base_commit=378cae1389de06aca9a1b92214798fd0fa5f0370" in manifest
+    assert "final metadata commit" in manifest
