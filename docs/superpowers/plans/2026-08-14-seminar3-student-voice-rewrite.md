@@ -10,13 +10,13 @@
 
 ## Global Constraints
 
-- Change only prose, Markdown, titles, and human-facing notebook labels. Source code, commands, raw JSON/TXT evidence, benchmark configuration/counts, GPU information, hashes, and metrics must not change.
+- Change only prose, Markdown, titles, and human-facing notebook labels. Source code, commands, raw JSON/TXT evidence, benchmark configuration/counts, GPU information, and metrics must not change. `SHA256SUMS.txt` is derived metadata and must be regenerated after its covered docs/notebooks change; do not treat its old digests as immutable evidence.
 - Use short Vietnamese sentences and “nhóm em”; introduce CUDA, NMS, CPU, GPU, benchmark, and notebook plainly for new readers.
 - Do not use “primary path”, “submission contract”, “provenance”, “đảm bảo tối ưu”, or equivalent corporate/overstated phrases.
 - Everywhere it appears, state honestly that <5 ms/batch is **MISSED**; never turn 29.599 ms/image into a target claim.
 - Preserve exactly: GPU V1/V2 parity: PASS; Suppression exercised: PASS; Evidence source commit:; Batch-32 target status: MISSED (<5 ms/batch).
 - Preserve benchmarks\run_v2_batch.py, --versions cpu v1 v2, --seed 0, and --batch-size 32 --n 10000 --warmup 2 --repeats 7 --seed 0; never use run_batch_v2.py.
-- Preserve evidence commit 7ee76cd5f6e12b87ddee247d58c9fd6ac866245b, package base commit 378cae1389de06aca9a1b92214798fd0fa5f0370, RTX 4060 Ti facts, and every measured value.
+- Preserve the evidence/source commit text 7ee76cd5f6e12b87ddee247d58c9fd6ac866245b, package base commit text 378cae1389de06aca9a1b92214798fd0fa5f0370, RTX 4060 Ti facts, and every measured value. These are reader-facing facts; they are distinct from the regenerated SHA-256 digest values.
 - Preserve current TEAM_PLAN: Phung Quoc Tuan has combined V1/V2 GPU, repository, CPU, initial-test, and proposal work; Le Quang Tan’s responsibility cell is blank. Do not infer work for Le Quang Tan.
 - Create no presentation artifact.
 - Archive scope/prefix remains Group11_Seminar3_CUDA_NMS/ plus README.md, requirements.txt, requirements-cuda13.txt, src, benchmarks, tests, submission/seminar_3, and docs/superpowers/specs/2026-08-14-seminar3-submission-design.md.
@@ -41,7 +41,7 @@
 
 **Interfaces:**
 - Consumes: ROOT, SUBMISSION, CHECKSUM_PATHS, docs, and notebook JSON.
-- Produces: regression tests which prose/notebook tasks must satisfy.
+- Produces: per-file regression tests which prose/notebook tasks must satisfy while existing tests remain the authority for machine commands and notebook markers.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -73,34 +73,39 @@ def _notebook_text(path: Path) -> str:
             items.append("".join(text) if isinstance(text, list) else text)
     return "\n".join(items)
 
-def test_reader_facing_docs_use_student_voice_and_keep_facts():
-    corpus = "\n".join(path.read_text(encoding="utf-8") for path in READER_DOCS)
-    assert corpus.count("nhóm em") >= len(READER_DOCS)
-    assert "<5 ms/batch" in corpus and "MISSED" in corpus
-    assert "947.180 ms" in corpus and "29.599 ms/image" in corpus
-    assert "7ee76cd5f6e12b87ddee247d58c9fd6ac866245b" in corpus
-    for phrase in BANNED_READER_PHRASES:
-        assert phrase not in corpus.lower()
+def test_each_reader_facing_doc_uses_student_voice_and_no_banned_phrase():
+    for path in READER_DOCS:
+        text = path.read_text(encoding="utf-8")
+        assert "nhóm em" in text, path
+        for phrase in BANNED_READER_PHRASES:
+            assert phrase not in text.lower(), (path, phrase)
 
-def test_notebooks_keep_commands_markers_and_student_voice():
-    corpus = "\n".join(_notebook_text(path) for path in NOTEBOOKS)
-    assert corpus.count("nhóm em") >= len(NOTEBOOKS)
-    assert "GPU V1/V2 parity: PASS" in corpus
-    assert "Suppression exercised: PASS" in corpus
-    assert "Batch-32 target status: MISSED (<5 ms/batch)" in corpus
-    assert "benchmarks/run_all.py --versions cpu v1 v2" in corpus
-    assert "benchmarks/run_v2_batch.py --batch-size 32 --n 10000 --warmup 2 --repeats 7" in corpus
-    assert "benchmarks/run_batch_v2.py" not in corpus
-    for phrase in BANNED_READER_PHRASES:
-        assert phrase not in corpus.lower()
+def test_each_notebook_uses_student_voice_and_no_banned_phrase():
+    for path in NOTEBOOKS:
+        text = _notebook_text(path)
+        assert "nhóm em" in text, path
+        for phrase in BANNED_READER_PHRASES:
+            assert phrase not in text.lower(), (path, phrase)
 
 def test_team_plan_preserves_recorded_assignments():
     text = (SUBMISSION / "TEAM_PLAN.md").read_text(encoding="utf-8")
     assert "Phung Quoc Tuan" in text
-    assert "V1/V2 GPU implementation, GPU tests, and proposal finalization." in text
-    assert "Repository setup, CPU baseline, initial tests, and proposal problem/background/risk work." in text
+    for concept in ("V1/V2", "GPU", "CPU", "repository", "proposal"):
+        assert concept in text
     assert "| Le Quang Tan | 22127378 | |" in text
 ~~~
+
+- [ ] **Step 1a: Capture the evidence immutability preflight**
+
+Run before changing any prose/notebook file:
+
+~~~powershell
+git diff --exit-code -- submission\seminar_3\evidence
+if ($LASTEXITCODE -ne 0) { throw 'Raw evidence already differs; stop and preserve or resolve it before this rewrite.' }
+git rev-parse HEAD
+~~~
+
+Expected: no evidence diff and the printed baseline commit is `13e3fc4` (or the current committed base if the plan is rebased). This check distinguishes immutable evidence from the SHA256SUMS file that Task 5 will intentionally regenerate.
 
 - [ ] **Step 2: Run RED**
 
@@ -111,7 +116,7 @@ $env:PYTHONPATH = (Resolve-Path src)
 & .\.venv\Scripts\python.exe -m pytest tests\test_submission_artifacts.py -q
 ~~~
 
-Expected: the three new tests FAIL because current wording lacks enough “nhóm em” and contains banned phrases; existing machine marker, command, checksum, and manifest tests remain active.
+Expected: the three new tests FAIL and identify each document/notebook still missing “nhóm em” or containing a banned phrase; existing machine-marker, command, checksum, and manifest tests remain active.
 
 - [ ] **Step 3: Commit the test checkpoint**
 
@@ -139,7 +144,7 @@ Use “nhóm em” in each document. Keep code blocks, commands, filenames, API 
 Run:
 
 ~~~powershell
-& .\.venv\Scripts\python.exe -m pytest tests\test_submission_artifacts.py -q -k "reader_facing_docs_use_student_voice"
+& .\.venv\Scripts\python.exe -m pytest tests\test_submission_artifacts.py -q -k "each_reader_facing_doc_uses_student_voice"
 git diff --check
 git diff -- README.md src/readme.md src/baseline/explain.md src/common/explain.md src/v1/explain.md src/v2/explain.md
 ~~~
@@ -167,16 +172,9 @@ git commit -m "docs: rewrite NMS guides in student voice"
 
 Keep table numbers exactly: 100 = 1.378/2.467/5.065/0.56×/0.27×; 1,000 = 16.259/4.501/7.625/3.61×/2.13×; 10,000 = 308.965/113.991/33.327/2.71×/9.27×; batch = 947.180 ms total, 29.599 ms/image. Keep the five-command PowerShell block byte-for-byte. Explain in Vietnamese: synthetic NMS-only, no inference/preprocessing/loading; V3 separate; YOLO checkpoint absent; <5 ms/batch MISSED on RTX 4060 Ti.
 
-- [ ] **Step 2: Preserve TEAM_PLAN cells exactly**
+- [ ] **Step 2: Make TEAM_PLAN fully Vietnamese without changing ownership**
 
-Keep:
-
-~~~markdown
-| Phung Quoc Tuan | 19127616 | V1/V2 GPU implementation, GPU tests, and proposal finalization. Repository setup, CPU baseline, initial tests, and proposal problem/background/risk work. |
-| Le Quang Tan | 22127378 | |
-~~~
-
-Translate only surrounding words and use “nhóm em”. Keep shared work at team level; add no hours, commits, or individual accomplishments.
+Translate every heading, table description, and checklist into Vietnamese, including the responsibility wording. The Phung Quoc Tuan cell must still say in Vietnamese that Tuan owns the combined V1/V2 GPU implementation, GPU tests, proposal finalization, repository setup, CPU baseline, initial tests, and proposal problem/background/risk work. Keep the Le Quang Tan row’s responsibility cell blank exactly: `| Le Quang Tan | 22127378 | |`. Keep shared work at team level; add no hours, commits, or individual accomplishments.
 
 - [ ] **Step 3: Rewrite manifest/design while preserving interfaces**
 
@@ -185,7 +183,7 @@ Keep every filename, two fixed commit lines, literal final metadata commit, targ
 - [ ] **Step 4: Verify and commit**
 
 ~~~powershell
-& .\.venv\Scripts\python.exe -m pytest tests\test_submission_artifacts.py -q -k "reader_facing_docs_use_student_voice or team_plan_preserves or submission_reproduction_commands_match_saved_evidence or manifest_names"
+& .\.venv\Scripts\python.exe -m pytest tests\test_submission_artifacts.py -q -k "each_reader_facing_doc_uses_student_voice or team_plan_preserves or submission_reproduction_commands_match_saved_evidence or manifest_names"
 git add submission\seminar_3\README.md submission\seminar_3\TEAM_PLAN.md submission\seminar_3\SUBMISSION_MANIFEST.txt docs\superpowers\specs\2026-08-14-seminar3-submission-design.md
 git commit -m "docs: rewrite Seminar 3 hand-in in student voice"
 ~~~
@@ -216,7 +214,7 @@ print(f'Batch-32 target status: {target_status} (<5 ms/batch)')
 - [ ] **Step 2: Verify source interfaces**
 
 ~~~powershell
-& .\.venv\Scripts\python.exe -m pytest tests\test_submission_artifacts.py -q -k "notebooks_keep_commands_markers_and_student_voice"
+& .\.venv\Scripts\python.exe -m pytest tests\test_submission_artifacts.py -q -k "each_notebook_uses_student_voice"
 ~~~
 
 Expected: PASS.
@@ -295,6 +293,17 @@ git commit -m "build: refresh Seminar 3 canonical checksums"
 
 Expected: all PASS; no raw evidence changes.
 
+- [ ] **Step 3: Prove raw evidence was not changed across the rewrite commits**
+
+Run:
+
+~~~powershell
+git diff --exit-code 13e3fc4..HEAD -- submission\seminar_3\evidence
+if ($LASTEXITCODE -ne 0) { throw 'The student-voice rewrite changed immutable raw evidence.' }
+~~~
+
+Expected: exit code 0. If execution begins from a rebased base, substitute the Task 1a recorded baseline commit for `13e3fc4`; do not substitute a commit created during this rewrite.
+
 ### Task 6: Archive, fresh-validate, and safely sync
 
 **Files:**
@@ -317,13 +326,14 @@ git archive --format=zip --prefix=Group11_Seminar3_CUDA_NMS/ --output=submission
 
 ~~~powershell
 $zip = (Resolve-Path submission\seminar_3\output\Group11_Seminar3_CUDA_NMS.zip).Path
+$testPython = (Resolve-Path .\.venv\Scripts\python.exe).Path
 $extract = Join-Path ([System.IO.Path]::GetTempPath()) ('seminar3-voice-' + [guid]::NewGuid())
 Expand-Archive -LiteralPath $zip -DestinationPath $extract
 $bundle = Join-Path $extract 'Group11_Seminar3_CUDA_NMS'
 foreach ($item in @('README.md','src/gpu_v1.ipynb','src/gpu_v2.ipynb','src/gpu_v3.ipynb','submission/seminar_3/FINAL_REPORT.ipynb','submission/seminar_3/SHA256SUMS.txt','tests/test_submission_artifacts.py','docs/superpowers/specs/2026-08-14-seminar3-submission-design.md')) { if (-not (Test-Path (Join-Path $bundle $item))) { throw "missing ZIP entry: $item" } }
 $env:PYTHONPATH = Join-Path $bundle 'src'
 Push-Location $bundle
-& 'D:\Study\HCMUS-APP\cuda-nms-numba\.venv\Scripts\python.exe' -m pytest tests\test_submission_artifacts.py -q
+& $testPython -m pytest tests\test_submission_artifacts.py -q
 $exitCode = $LASTEXITCODE
 Pop-Location
 if ($exitCode -ne 0) { exit $exitCode }
@@ -334,7 +344,10 @@ Expected: fresh extraction artifact tests PASS.
 - [ ] **Step 3: Reject unmanaged paths, copy without delete, compare hashes**
 
 ~~~powershell
-$destination = (Resolve-Path 'submission\seminar_3\output\Group11_Seminar3_CUDA_NMS\Group11_Seminar3_CUDA_NMS').Path
+$destinationInput = Read-Host 'Paste the verified absolute main-repository inner extraction path (ending in Group11_Seminar3_CUDA_NMS)'
+if (-not [System.IO.Path]::IsPathFullyQualified($destinationInput)) { throw 'Destination must be an absolute path supplied for the user main repository.' }
+$destination = (Resolve-Path -LiteralPath $destinationInput).Path
+if (-not $destination.EndsWith('\submission\seminar_3\output\Group11_Seminar3_CUDA_NMS\Group11_Seminar3_CUDA_NMS', [System.StringComparison]::OrdinalIgnoreCase)) { throw "Unexpected destination suffix: $destination" }
 $sourceFiles = Get-ChildItem $bundle -File -Recurse | ForEach-Object { $_.FullName.Substring($bundle.Length).TrimStart('\','/') -replace '\\','/' } | Sort-Object
 $destinationFiles = Get-ChildItem $destination -File -Recurse | ForEach-Object { $_.FullName.Substring($destination.Length).TrimStart('\','/') -replace '\\','/' } | Sort-Object
 $unexpected = Compare-Object $sourceFiles $destinationFiles -PassThru | Where-Object { $_ -in $destinationFiles }
@@ -380,4 +393,3 @@ Plan complete and saved to docs/superpowers/plans/2026-08-14-seminar3-student-vo
 2. Inline Execution - Execute tasks in this session using executing-plans, batch execution with checkpoints
 
 Which approach?
-
