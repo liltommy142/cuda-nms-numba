@@ -32,8 +32,9 @@ better). Speedups are CPU median divided by the GPU median.
 | 10,000 | 308.965 | 113.991 | 33.327 | 2.71× | 9.27× |
 
 V2 batch-32 at 10,000 candidates/image measured 947.180 ms per batch, or
-29.599 ms/image. Therefore the catalog stretch target of **<5 ms/image is
-MISSED** on this environment. This result is not detector end-to-end latency.
+29.599 ms/image. Therefore the catalog stretch target of **<5 ms/batch is
+MISSED** on this environment. The per-image figure is contextual only. This
+result is not detector end-to-end latency.
 
 ## Five-command reproduction
 
@@ -43,8 +44,8 @@ Run from the repository root with an NVIDIA driver compatible with CUDA 13:
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements-cuda13.txt
 .\.venv\Scripts\python.exe -m pytest -q
-.\.venv\Scripts\python.exe benchmarks\run_all.py --n 100 1000 10000 --warmup 2 --repeats 7 --json submission\seminar_3\evidence\benchmark_v1_v2.json
-.\.venv\Scripts\python.exe benchmarks\run_batch_v2.py --batch-size 32 --n 10000 --warmup 2 --repeats 7 --json submission\seminar_3\evidence\batch32_v2.json
+.\.venv\Scripts\python.exe benchmarks\run_all.py --n 100 1000 10000 --versions cpu v1 v2 --warmup 2 --repeats 7 --seed 0 --json submission\seminar_3\evidence\benchmark_v1_v2.json
+.\.venv\Scripts\python.exe benchmarks\run_v2_batch.py --batch-size 32 --n 10000 --warmup 2 --repeats 7 --seed 0 --json submission\seminar_3\evidence\batch32_v2.json
 ```
 
 Execute `FINAL_REPORT.ipynb` in the same environment to run deterministic
