@@ -4,17 +4,12 @@
 
 | Member | Student ID | Proposal-backed responsibility |
 | --- | --- | --- |
-| Phung Quoc Tuan | 19127616 | Repository setup, CPU baseline, initial tests, and proposal problem/background/risk work. |
-| Le Quang Tan | 22127378 | V1/V2 GPU implementation, GPU tests, and proposal finalization. |
+| Phung Quoc Tuan | 19127616 |  V1/V2 GPU implementation, GPU tests, and proposal finalization. Repository setup, CPU baseline, initial tests, and proposal problem/background/risk work. |
+| Le Quang Tan | 22127378 | |
 
 ## Shared completion responsibility
 
-The team jointly owns the class-aware contract/restructure, evidence
-validation, final report review, and mutual code explanation. The submitted
-notebook validates CPU/V1/V2 parity on deterministic multiclass candidates and
-renders committed benchmark evidence. Responsibility is documented at the
-team level; this record deliberately does not invent hours or individual commit
-ownership that the Git history cannot prove.
+The team jointly owns the class-aware contract/restructure, evidence validation, final report review, and mutual code explanation. The submitted notebook validates CPU/V1/V2 parity on deterministic multiclass candidates and renders committed benchmark evidence. Responsibility is documented at the team level; this record deliberately does not invent hours or individual commit ownership that the Git history cannot prove.
 
 ## Handover checklist
 
