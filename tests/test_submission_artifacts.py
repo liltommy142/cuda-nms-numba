@@ -51,6 +51,7 @@ def test_final_report_executes_against_submission_evidence():
         if item.get("output_type") == "stream"
     )
     assert "GPU V1/V2 parity: PASS" in output
+    assert "Suppression exercised: PASS" in output
     assert "Evidence source commit:" in output
     assert "Batch-32 target status: MISSED (<5 ms/batch)" in output
 
