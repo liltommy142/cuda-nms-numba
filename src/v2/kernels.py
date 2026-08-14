@@ -86,6 +86,8 @@ def _upload_batched_soa(boxes: np.ndarray):
 def compute_iou_matrix_gpu_v2(boxes: np.ndarray) -> np.ndarray:
     """Return the coalesced SoA kernel's full IoU matrix on the host."""
     boxes = np.ascontiguousarray(boxes, dtype=np.float32)
+    if boxes.shape == (0, 4):
+        return np.empty((0, 0), dtype=np.float32)
     coordinates = [cuda.to_device(np.ascontiguousarray(boxes[:, axis])) for axis in range(4)]
     output = cuda.device_array((len(boxes), len(boxes)), dtype=np.float32)
     blocks = tuple((len(boxes) + size - 1) // size for size in IOU_THREADS)

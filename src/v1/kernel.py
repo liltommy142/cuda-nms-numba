@@ -44,8 +44,11 @@ def _iou_matrix_kernel(boxes, iou_out):
 
 def compute_iou_matrix_gpu(boxes: np.ndarray) -> np.ndarray:
     """Upload boxes, compute V1's full ``N×N`` IoU matrix, and copy it back."""
+    boxes = np.ascontiguousarray(boxes, dtype=np.float32)
+    if boxes.shape == (0, 4):
+        return np.empty((0, 0), dtype=np.float32)
     n = len(boxes)
-    device_boxes = cuda.to_device(np.ascontiguousarray(boxes, dtype=np.float32))
+    device_boxes = cuda.to_device(boxes)
     device_iou = cuda.device_array((n, n), dtype=np.float32)
     blocks = (
         (n + THREADS_PER_BLOCK[0] - 1) // THREADS_PER_BLOCK[0],
