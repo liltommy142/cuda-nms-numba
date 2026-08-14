@@ -1,5 +1,6 @@
 import hashlib
 from pathlib import Path
+import subprocess
 
 import nbformat
 from nbclient import NotebookClient
@@ -7,6 +8,32 @@ from nbclient import NotebookClient
 
 ROOT = Path(__file__).resolve().parents[1]
 SUBMISSION = ROOT / "submission" / "seminar_3"
+
+
+def _checksum_payload(path: Path) -> bytes:
+    """Return Git's canonical blob bytes when available, raw bytes otherwise.
+
+    The hand-in ZIP is a Git archive and therefore contains Git blob bytes.
+    On Windows, a working tree may have CRLF checkout conversion, so hashing
+    raw working-tree text would not reliably describe the archive payload.
+    """
+    if not (ROOT / ".git").exists():
+        return path.read_bytes()
+
+    relative = path.relative_to(ROOT).as_posix()
+    object_id = subprocess.run(
+        ["git", "hash-object", f"--path={relative}", str(path)],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    return subprocess.run(
+        ["git", "cat-file", "blob", object_id],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+    ).stdout
 
 
 def test_final_report_executes_against_submission_evidence():
@@ -57,7 +84,7 @@ def test_submission_checksums_match_files():
         assert len(expected) == 64
         assert expected == expected.lower()
         assert relative != "SHA256SUMS.txt"
-        payload = (SUBMISSION / relative).read_bytes()
+        payload = _checksum_payload(SUBMISSION / relative)
         assert hashlib.sha256(payload).hexdigest() == expected
         relatives.append(relative)
     assert relatives == sorted(relatives)
