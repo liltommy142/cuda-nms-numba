@@ -16,6 +16,7 @@
 | Đang chuẩn bị buổi thuyết trình seminar | [`../presentation/README.md`](../presentation/README.md) (điểm bắt đầu của bộ tài liệu thuyết trình) |
 | Muốn biết số liệu nào là thật, số nào còn chờ CUDA | [`../presentation/seminar_2/README.md`](../presentation/seminar_2/README.md) |
 | Chuẩn bị trả lời Q&A / lo bị hỏi khó | [`../presentation/seminar_2/QA_PREP.md`](../presentation/seminar_2/QA_PREP.md) |
+| Cần nộp Seminar 3 (notebook, evidence, team plan, hướng dẫn tái lập) | [`../submission/seminar_3/README.md`](../submission/seminar_3/README.md) |
 
 ## Bản đồ toàn bộ tài liệu
 
@@ -31,6 +32,8 @@ cuda-nms-numba/
 │   ├── README.md                    → điểm bắt đầu của bộ tài liệu thuyết trình + trạng thái số liệu
 │   ├── seminar_1/                   → proposal đã nộp
 │   └── seminar_2/                   → deck, outline, script, Q&A và evidence Seminar 2
+├── submission/
+│   └── seminar_3/                   → bundle nộp: notebook, evidence, plan và checksums
 ├── src/*.py + src/*.ipynb           → code thật (tổng quan module ở TECHNICAL_DOCUMENTATION §3)
 └── tests/                           → correctness + benchmark metadata contracts
 ```

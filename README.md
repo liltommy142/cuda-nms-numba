@@ -35,6 +35,12 @@ are pre-restructure until the current commit is rerun on a CUDA runtime.
 
 See `CSC14116 - Proposal.docx` for the full project proposal.
 
+## Seminar 3 submission
+
+The submission-only hand-in bundle, including the runnable notebook, fresh CUDA
+evidence, team plan, reproduction guide, manifest, and checksums, is at
+[`submission/seminar_3/README.md`](submission/seminar_3/README.md).
+
 ## Documentation
 
 🧭 Start at [`docs/INDEX.md`](docs/INDEX.md) — a map of every doc in this repo, organized by what you're trying to do (understand the project, run it yourself, prep the talk, look up a term). Individually: [`docs/HOW_TO_RUN.md`](docs/HOW_TO_RUN.md) (run code/tests without AI help), [`docs/TECHNICAL_DOCUMENTATION.md`](docs/TECHNICAL_DOCUMENTATION.md) (full technical writeup), [`docs/GLOSSARY.md`](docs/GLOSSARY.md) (term lookup).

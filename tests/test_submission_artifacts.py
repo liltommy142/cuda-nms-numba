@@ -1,3 +1,4 @@
+import hashlib
 from pathlib import Path
 
 import nbformat
@@ -45,3 +46,32 @@ def test_submission_reproduction_commands_match_saved_evidence():
         assert "--batch-size 32 --n 10000 --warmup 2 --repeats 7 --seed 0" in text
         assert "<5 ms/batch" in text
         assert "per_image_ms < 5" not in text
+
+
+def test_submission_checksums_match_files():
+    lines = (SUBMISSION / "SHA256SUMS.txt").read_text(encoding="utf-8").splitlines()
+    assert lines
+    relatives = []
+    for line in lines:
+        expected, relative = line.split("  ", 1)
+        assert len(expected) == 64
+        assert expected == expected.lower()
+        assert relative != "SHA256SUMS.txt"
+        payload = (SUBMISSION / relative).read_bytes()
+        assert hashlib.sha256(payload).hexdigest() == expected
+        relatives.append(relative)
+    assert relatives == sorted(relatives)
+
+
+def test_manifest_names_every_required_deliverable():
+    manifest = (SUBMISSION / "SUBMISSION_MANIFEST.txt").read_text(encoding="utf-8")
+    for name in (
+        "FINAL_REPORT.ipynb",
+        "README.md",
+        "TEAM_PLAN.md",
+        "evidence/pytest_cuda.txt",
+        "evidence/benchmark_v1_v2.json",
+        "evidence/batch32_v2.json",
+        "evidence/environment.txt",
+    ):
+        assert name in manifest

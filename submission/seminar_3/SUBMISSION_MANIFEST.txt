@@ -1,0 +1,47 @@
+Seminar 3 submission manifest — CUDA/Numba hard NMS
+====================================================
+
+Course: CSC14116 — Applied Parallel Programming, Topic A4
+Group 11
+- Lê Quang Tân (22127378)
+- Phùng Quốc Tuấn (19127616)
+
+Repository: https://github.com/liltommy142/cuda-nms-numba
+Evidence source_commit=7ee76cd5f6e12b87ddee247d58c9fd6ac866245b
+
+Scope and claim boundaries
+--------------------------
+This submission evaluates deterministic synthetic NMS only: class-aware greedy
+hard NMS with a NumPy CPU baseline, CUDA/Numba V1 dense IoU, and CUDA/Numba V2
+packed suppression masks. It excludes detector inference, image preprocessing,
+and model loading. The optional YOLO detector checkpoint is not included, so
+this submission makes no detector-inference result claim. V3 Matrix NMS remains
+a separate experiment and is not presented as hard-NMS parity.
+
+Target status
+-------------
+The canonical catalog target is <5 ms/batch. The saved V2 batch-32 median is
+947.180 ms total for 32 images (29.599 ms/image, contextual only), so the
+canonical <5 ms/batch target is MISSED on the recorded RTX 4060 Ti environment.
+
+Tracked submission deliverables
+-------------------------------
+- FINAL_REPORT.ipynb — runnable report; parity check plus saved-evidence view.
+- README.md — scope, results, exact reproduction commands, and limitations.
+- TEAM_PLAN.md — proposal-backed responsibility and completion record.
+- SUBMISSION_MANIFEST.txt — this provenance and claim-boundary record.
+- SHA256SUMS.txt — SHA-256 integrity entries for the deliverables and evidence.
+- evidence/pytest_cuda.txt — complete CUDA pytest transcript.
+- evidence/benchmark_v1_v2.json — structured repeated CPU/V1/V2 sweep.
+- evidence/benchmark_v1_v2.txt — human-readable CPU/V1/V2 sweep transcript.
+- evidence/batch32_v2.json — structured V2 batch-32 measurement.
+- evidence/batch32_v2.txt — human-readable V2 batch-32 transcript.
+- evidence/environment.txt — GPU, driver, Python, package, and commit record.
+
+Integrity procedure
+-------------------
+SHA256SUMS.txt lists lowercase SHA-256 digests using paths relative to this
+directory, in lexical order. The checksum file intentionally does not hash
+itself. Re-run `python -m pytest tests/test_submission_artifacts.py -q` from
+the repository root after extracting the bundle to verify the manifest,
+checksums, and executable report.
