@@ -1,6 +1,6 @@
 source_commit=7ee76cd5f6e12b87ddee247d58c9fd6ac866245b
 captured_utc=2026-08-14T08:42:44.7685718Z
-Fri Aug 14 15:42:44 2026       
+Fri Aug 14 15:42:44 2026
 +-----------------------------------------------------------------------------------------+
 | NVIDIA-SMI 610.88                 KMD Version: 610.88        CUDA UMD Version: 13.3     |
 +-----------------------------------------+------------------------+----------------------+
@@ -47,7 +47,7 @@ Version: 1.26.4
 Summary: Fundamental package for array computing in Python
 Home-page: https://numpy.org
 Author: Travis E. Oliphant et al.
-Author-email: 
+Author-email:
 License: Copyright (c) 2005-2023, NumPy Developers.
 All rights reserved.
 
@@ -1020,15 +1020,15 @@ License: LGPL-2.1-or-later
     Lesser General Public License for more details.
     https://www.gnu.org/licenses/old-licenses/lgpl-2.1.html
 Location: D:\Study\HCMUS-APP\cuda-nms-numba\.worktrees\seminar3-submission\.venv\Lib\site-packages
-Requires: 
+Requires:
 Required-by: cuda-core, numba, torchvision
 ---
 Name: numba
 Version: 0.67.0
 Summary: compiling Python code using LLVM
 Home-page: https://numba.pydata.org
-Author: 
-Author-email: 
+Author:
+Author-email:
 License: BSD
 Location: D:\Study\HCMUS-APP\cuda-nms-numba\.worktrees\seminar3-submission\.venv\Lib\site-packages
 Requires: llvmlite, numpy
@@ -1039,11 +1039,11 @@ Version: 0.30.4
 Summary: CUDA target for Numba
 Home-page: https://nvidia.github.io/numba-cuda/
 Author: Anaconda Inc., NVIDIA Corporation
-Author-email: 
+Author-email:
 License-Expression: BSD-2-Clause
 Location: D:\Study\HCMUS-APP\cuda-nms-numba\.worktrees\seminar3-submission\.venv\Lib\site-packages
 Requires: cuda-bindings, cuda-core, cuda-pathfinder, numba, packaging
-Required-by: 
+Required-by:
 ---
 Name: torch
 Version: 2.5.1+cpu
@@ -1065,15 +1065,15 @@ Author-email: soumith@pytorch.org
 License: BSD
 Location: D:\Study\HCMUS-APP\cuda-nms-numba\.worktrees\seminar3-submission\.venv\Lib\site-packages
 Requires: numpy, pillow, torch
-Required-by: 
+Required-by:
 ---
 Name: pytest
 Version: 9.1.1
 Summary: pytest: simple powerful testing with Python
 Home-page: https://docs.pytest.org/en/latest/
 Author: Brianna Laugher, Bruno Oliveira, Floris Bruynooghe, Freya Bruhin, Holger Krekel, Others (See AUTHORS), Ronny Pfannschmidt
-Author-email: 
+Author-email:
 License-Expression: MIT
 Location: D:\Study\HCMUS-APP\cuda-nms-numba\.worktrees\seminar3-submission\.venv\Lib\site-packages
 Requires: colorama, iniconfig, packaging, pluggy, pygments
-Required-by: 
+Required-by:
