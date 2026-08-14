@@ -1,0 +1,40 @@
+{
+  "benchmark_scope": "nms_only_synthetic",
+  "candidate_source": "deterministic_synthetic",
+  "timing_scope": "candidate NMS only; excludes model inference",
+  "environment": {
+    "timestamp_utc": "2026-08-14T08:47:31.128071+00:00",
+    "python": "3.11.9 (tags/v3.11.9:de54cf5, Apr  2 2024, 10:12:12) [MSC v.1938 64 bit (AMD64)]",
+    "platform": "Windows-10-10.0.26200-SP0",
+    "numpy": "1.26.4",
+    "numba": "0.67.0",
+    "gpu": "NVIDIA GeForce RTX 4060 Ti",
+    "compute_capability": [
+      8,
+      9
+    ]
+  },
+  "configuration": {
+    "batch_size": 32,
+    "n": 10000,
+    "warmup": 2,
+    "repeats": 7,
+    "seed": 0,
+    "json": "submission\\seminar_3\\evidence\\batch32_v2.json"
+  },
+  "input_semantics": "batch_size independent images, n class-labelled boxes per image",
+  "timing_semantics": "end-to-end V2 call: host sort, transfer, GPU mask kernel, mask download, and host greedy mask resolution",
+  "samples_seconds": [
+    0.8926448999991408,
+    0.9623748000012711,
+    1.0851576999993995,
+    0.9439237999977195,
+    0.9471302999991167,
+    0.9693116999987978,
+    0.9471797000005608
+  ],
+  "median_batch_seconds": 0.9471797000005608,
+  "mean_batch_seconds": 0.9639604142851438,
+  "stddev_batch_seconds": 0.058838969661145164,
+  "median_per_image_seconds": 0.029599365625017526
+}
