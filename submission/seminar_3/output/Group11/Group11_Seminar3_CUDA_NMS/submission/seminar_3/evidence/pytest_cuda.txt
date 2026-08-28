@@ -1,0 +1,52 @@
+............................s........................................... [ 87%]
+..........                                                               [100%]
+============================== warnings summary ===============================
+tests/test_correctness.py::test_gpu_v1_matches_cpu_and_torchvision_per_class
+tests/test_correctness.py::test_gpu_v2_matches_cpu_with_score_ties
+  D:\Study\HCMUS-APP\cuda-nms-numba\.worktrees\seminar3-submission\.venv\Lib\site-packages\numba_cuda\numba\cuda\dispatcher.py:748: NumbaPerformanceWarning: [1mGrid size 25 will likely result in GPU under-utilization due to low occupancy.[0m
+    warn(errors.NumbaPerformanceWarning(msg))
+
+tests/test_correctness.py::test_gpu_v2_matches_cpu_per_class
+tests/test_correctness.py::test_gpu_v1_iou_matrix_diagonal_is_one
+tests/test_correctness.py::test_gpu_v2_iou_matrix_diagonal_is_one
+  D:\Study\HCMUS-APP\cuda-nms-numba\.worktrees\seminar3-submission\.venv\Lib\site-packages\numba_cuda\numba\cuda\dispatcher.py:748: NumbaPerformanceWarning: [1mGrid size 4 will likely result in GPU under-utilization due to low occupancy.[0m
+    warn(errors.NumbaPerformanceWarning(msg))
+
+tests/test_correctness.py::test_gpu_v2_batched_multiclass_matches_cpu
+tests/test_correctness.py::test_gpu_v1_suppresses_duplicate
+tests/test_correctness.py::test_gpu_v2_iou_helper_returns_host_array
+  D:\Study\HCMUS-APP\cuda-nms-numba\.worktrees\seminar3-submission\.venv\Lib\site-packages\numba_cuda\numba\cuda\dispatcher.py:748: NumbaPerformanceWarning: [1mGrid size 1 will likely result in GPU under-utilization due to low occupancy.[0m
+    warn(errors.NumbaPerformanceWarning(msg))
+
+tests/test_correctness.py::test_gpu_v1_iou_matrix_matches_cpu
+tests/test_correctness.py::test_gpu_v2_iou_matrix_matches_cpu
+tests/test_correctness.py::test_gpu_v2_matches_cpu_baseline[200]
+  D:\Study\HCMUS-APP\cuda-nms-numba\.worktrees\seminar3-submission\.venv\Lib\site-packages\numba_cuda\numba\cuda\dispatcher.py:748: NumbaPerformanceWarning: [1mGrid size 16 will likely result in GPU under-utilization due to low occupancy.[0m
+    warn(errors.NumbaPerformanceWarning(msg))
+
+tests/test_correctness.py::test_gpu_v2_batched_matches_cpu_at_partial_64_block[3]
+tests/test_correctness.py::test_gpu_v3_keeps_non_overlapping
+  D:\Study\HCMUS-APP\cuda-nms-numba\.worktrees\seminar3-submission\.venv\Lib\site-packages\numba_cuda\numba\cuda\dispatcher.py:748: NumbaPerformanceWarning: [1mGrid size 3 will likely result in GPU under-utilization due to low occupancy.[0m
+    warn(errors.NumbaPerformanceWarning(msg))
+
+tests/test_correctness.py::test_gpu_v2_batched_matches_cpu_at_partial_64_block[32]
+  D:\Study\HCMUS-APP\cuda-nms-numba\.worktrees\seminar3-submission\.venv\Lib\site-packages\numba_cuda\numba\cuda\dispatcher.py:748: NumbaPerformanceWarning: [1mGrid size 32 will likely result in GPU under-utilization due to low occupancy.[0m
+    warn(errors.NumbaPerformanceWarning(msg))
+
+tests/test_correctness.py::test_gpu_v3_suppresses_duplicate
+tests/test_correctness.py::test_gpu_v3_suppresses_duplicate
+  D:\Study\HCMUS-APP\cuda-nms-numba\.worktrees\seminar3-submission\.venv\Lib\site-packages\numba_cuda\numba\cuda\dispatcher.py:748: NumbaPerformanceWarning: [1mGrid size 2 will likely result in GPU under-utilization due to low occupancy.[0m
+    warn(errors.NumbaPerformanceWarning(msg))
+
+tests/test_correctness.py::test_gpu_v3_sanity[50]
+  D:\Study\HCMUS-APP\cuda-nms-numba\.worktrees\seminar3-submission\.venv\Lib\site-packages\numba_cuda\numba\cuda\dispatcher.py:748: NumbaPerformanceWarning: [1mGrid size 50 will likely result in GPU under-utilization due to low occupancy.[0m
+    warn(errors.NumbaPerformanceWarning(msg))
+
+tests/test_correctness.py::test_gpu_v3_matches_matrix_nms_reference[linear]
+  D:\Study\HCMUS-APP\cuda-nms-numba\.worktrees\seminar3-submission\.venv\Lib\site-packages\numba_cuda\numba\cuda\dispatcher.py:748: NumbaPerformanceWarning: [1mGrid size 30 will likely result in GPU under-utilization due to low occupancy.[0m
+    warn(errors.NumbaPerformanceWarning(msg))
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+SKIPPED [1] tests\test_correctness.py:158: local YOLOv5 checkpoint is unavailable
+81 passed, 1 skipped, 18 warnings in 12.47s
