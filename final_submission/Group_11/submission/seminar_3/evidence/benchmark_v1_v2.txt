@@ -1,0 +1,29 @@
+D:\Study\HCMUS-APP\cuda-nms-numba\.worktrees\seminar3-submission\.venv\Lib\site-packages\numba_cuda\numba\cuda\dispatcher.py:748: NumbaPerformanceWarning: Grid size 4 will likely result in GPU under-utilization due to low occupancy.
+  warn(errors.NumbaPerformanceWarning(msg))
+D:\Study\HCMUS-APP\cuda-nms-numba\.worktrees\seminar3-submission\.venv\Lib\site-packages\numba_cuda\numba\cuda\dispatcher.py:748: NumbaPerformanceWarning: Grid size 1 will likely result in GPU under-utilization due to low occupancy.
+  warn(errors.NumbaPerformanceWarning(msg))
+D:\Study\HCMUS-APP\cuda-nms-numba\.worktrees\seminar3-submission\.venv\Lib\site-packages\numba_cuda\numba\cuda\dispatcher.py:748: NumbaPerformanceWarning: Grid size 16 will likely result in GPU under-utilization due to low occupancy.
+  warn(errors.NumbaPerformanceWarning(msg))
+{
+  "timestamp_utc": "2026-08-14T08:46:19.294349+00:00",
+  "python": "3.11.9 (tags/v3.11.9:de54cf5, Apr  2 2024, 10:12:12) [MSC v.1938 64 bit (AMD64)]",
+  "platform": "Windows-10-10.0.26200-SP0",
+  "numpy": "1.26.4",
+  "numba": "0.67.0",
+  "cuda_available": true,
+  "gpu": "NVIDIA GeForce RTX 4060 Ti",
+  "compute_capability": [
+    8,
+    9
+  ]
+}
+N=   100 cpu: median=    1.378 ms  std=  0.133 ms
+N=   100  v1: median=    2.467 ms  std=  0.833 ms
+N=   100  v2: median=    5.065 ms  std=  1.025 ms
+N=  1000 cpu: median=   16.259 ms  std=  0.726 ms
+N=  1000  v1: median=    4.501 ms  std=  0.917 ms
+N=  1000  v2: median=    7.625 ms  std=  1.459 ms
+N= 10000 cpu: median=  308.965 ms  std= 96.941 ms
+N= 10000  v1: median=  113.991 ms  std=  3.696 ms
+N= 10000  v2: median=   33.327 ms  std=  5.202 ms
+Wrote submission\seminar_3\evidence\benchmark_v1_v2.json
