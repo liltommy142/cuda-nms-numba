@@ -138,5 +138,5 @@ def test_manifest_names_every_required_deliverable():
     ):
         assert name in manifest
     assert "Evidence tested source_commit=7ee76cd5f6e12b87ddee247d58c9fd6ac866245b" in manifest
-    assert "Package content base_commit=378cae1389de06aca9a1b92214798fd0fa5f0370" in manifest
-    assert "final metadata commit" in manifest
+    assert "Package content base_commit=1e6998864d80dab2651cff75b37c2e6b7a5c1e7b" in manifest
+    assert "submission-only packaging fixes" in manifest

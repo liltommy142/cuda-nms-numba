@@ -11,6 +11,9 @@ numba==0.59.1  # pinned: numba 0.66.0 (latest as of writing) fails to JIT-compil
                # `numba==0.59.1 numpy<2` if that smoke test fails (numba 0.59.1 is incompatible
                # with the numpy 2.x Colab ships, so installing it eagerly forces a runtime restart).
 pytest==9.1.1
+nbformat==5.10.4
+nbclient==0.10.2
+ipykernel==6.30.1
 pillow==12.2.0
 psutil==7.2.2
 requests==2.34.2

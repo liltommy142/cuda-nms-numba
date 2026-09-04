@@ -2,14 +2,19 @@
 
 ## Members and recorded responsibilities
 
-| Member | Student ID | Proposal-backed responsibility |
+| Member | Student ID | Recorded responsibility |
 | --- | --- | --- |
-| Phung Quoc Tuan | 19127616 |  V1/V2 GPU implementation, GPU tests, and proposal finalization. Repository setup, CPU baseline, initial tests, and proposal problem/background/risk work. |
-| Le Quang Tan | 22127378 | |
+| Phung Quoc Tuan | 19127616 | Primary implementation owner: repository setup, CPU baseline, V1/V2 GPU implementation, correctness tests, evidence preparation, and proposal drafting/finalization. |
+| Le Quang Tan | 22127378 | Final report review, evidence review, presentation preparation, and shared code explanation. |
 
 ## Shared completion responsibility
 
-The team jointly owns the class-aware contract/restructure, evidence validation, final report review, and mutual code explanation. The submitted notebook validates CPU/V1/V2 parity on deterministic multiclass candidates and renders committed benchmark evidence. Responsibility is documented at the team level; this record deliberately does not invent hours or individual commit ownership that the Git history cannot prove.
+Phung Quoc Tuan is recorded as the primary implementation owner. Both members
+reviewed the final report and evidence and are responsible for explaining the
+candidate contract, CUDA strategy, benchmark scope, and known limitations. The
+submitted notebook validates CPU/V1/V2 parity on deterministic multiclass
+candidates and renders the committed benchmark evidence. This record does not
+invent hours or commit ownership that the Git history cannot support.
 
 ## Handover checklist
 

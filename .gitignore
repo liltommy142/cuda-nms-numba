@@ -53,6 +53,7 @@ Thumbs.db
 .superpowers/
 *.pptx.inspect.ndjson
 presentation/seminar_2/submission/*.zip
+submission/seminar_3/output/
 
 # Environment variables / secrets
 .env

@@ -1,29 +1,30 @@
 # Seminar 3 submission — CUDA/Numba hard NMS
 
-## Upload these files
+## Start here
 
-Upload `FINAL_REPORT.ipynb`, `TEAM_PLAN.md`, and the GitHub repository/commit
-history. For convenience, the final package also includes this README, the
-fresh evidence logs, manifest, checksums, source, tests, and benchmark scripts.
-No presentation deck is included because this is a submission-only hand-in.
+The main thing to open is `FINAL_REPORT.ipynb`. The notebook, source code, tests,
+benchmark scripts, and the evidence folder are kept together so the result is
+easy to check. `TEAM_PLAN.md` records what each member actually handled. The
+presentation deck is not inside this hand-in because this ZIP is the code/report
+package for Seminar 3.
 
-## What was evaluated
+## What we implemented
 
-The primary path is class-aware greedy hard non-maximum suppression (NMS) for
-one image: NumPy CPU baseline, CUDA/Numba V1 dense pairwise IoU, and CUDA/Numba
-V2 packed suppression masks. V3 Matrix NMS is separate and is not presented as
-hard-NMS parity.
+We implemented class-aware greedy hard non-maximum suppression (NMS) for one
+image in three versions: a NumPy CPU baseline, CUDA/Numba V1 with dense pairwise
+IoU, and CUDA/Numba V2 with packed suppression masks. V3 Matrix NMS is kept as a
+separate experiment; we do not call it hard-NMS parity.
 
-All reported timings are deterministic synthetic **NMS-only** measurements:
-they exclude detector inference, image preprocessing, and model loading. The
-evidence was collected from source commit
+The timings below use deterministic synthetic boxes and measure NMS only. They
+do not include detector inference, image preprocessing, or model loading. The
+GPU evidence was collected from source commit
 `7ee76cd5f6e12b87ddee247d58c9fd6ac866245b` on the recorded NVIDIA GeForce RTX
 4060 Ti environment. See `evidence/environment.txt` for full provenance.
 
 ## Verified results
 
-Seven repeated samples after two warm-ups; medians in milliseconds (lower is
-better). Speedups are CPU median divided by the GPU median.
+We ran two warm-ups and then seven samples. The table shows medians in
+milliseconds (lower is better); speedup is CPU median divided by GPU median.
 
 | Candidates/image | CPU | V1 | V2 | V1 speedup | V2 speedup |
 | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -31,27 +32,28 @@ better). Speedups are CPU median divided by the GPU median.
 | 1,000 | 16.259 | 4.501 | 7.625 | 3.61× | 2.13× |
 | 10,000 | 308.965 | 113.991 | 33.327 | 2.71× | 9.27× |
 
-V2 batch-32 at 10,000 candidates/image measured 947.180 ms per batch, or
-29.599 ms/image. Therefore the catalog stretch target of **<5 ms/batch is
-MISSED** on this environment. The per-image figure is contextual only. This
-result is not detector end-to-end latency.
+For V2 batch-32 with 10,000 candidates per image, the measured median was
+947.180 ms for the whole batch (29.599 ms/image). So the catalog stretch target
+of **<5 ms/batch is MISSED** on this machine. We leave that result visible
+instead of presenting the per-image number as if it were a batch result. This is
+still NMS-only timing, not end-to-end detector latency.
 
 ## Five-command reproduction
 
-Run from the repository root with an NVIDIA driver compatible with CUDA 13:
+From the repository root, with an NVIDIA driver compatible with CUDA 13, the
+same run can be reproduced with:
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements-cuda13.txt
-.\.venv\Scripts\python.exe -m pytest -q
+.\.venv\Scripts\python.exe -m pytest tests -q
 .\.venv\Scripts\python.exe benchmarks\run_all.py --n 100 1000 10000 --versions cpu v1 v2 --warmup 2 --repeats 7 --seed 0 --json submission\seminar_3\evidence\benchmark_v1_v2.json
 .\.venv\Scripts\python.exe benchmarks\run_v2_batch.py --batch-size 32 --n 10000 --warmup 2 --repeats 7 --seed 0 --json submission\seminar_3\evidence\batch32_v2.json
 ```
 
-Execute `FINAL_REPORT.ipynb` in the same environment to run deterministic
-CPU/V1/V2 parity and render the saved evidence. The optional YOLOv5 checkpoint
-is absent from this repository; the submission makes no detector-inference
-claim without that external asset.
+Running `FINAL_REPORT.ipynb` in that environment checks CPU/V1/V2 parity and
+shows the saved evidence. The optional YOLOv5 checkpoint is not included, so we
+do not make a detector-inference claim.
 
 ## Evidence files
 
